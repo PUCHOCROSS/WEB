@@ -1,0 +1,14 @@
+import { MetadataRoute } from 'next';
+
+export default function robots(): MetadataRoute.Robots {
+  // 본인의 실제 도메인 주소로 수정해주세요 (예: https://myblog.com)
+  const baseUrl = 'https://www.dolmeori.com/'; 
+
+  return {
+    rules: {
+      userAgent: '*',
+      allow: '/', // 모든 페이지를 검색엔진이 수집하도록 허용
+    },
+    sitemap: `${baseUrl}/sitemap.xml`,
+  };
+}
