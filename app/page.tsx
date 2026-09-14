@@ -1,49 +1,92 @@
-export default function Home() {
+export default function BlogHome() {
+  // 샘플 블로그 포스트 데이터
+  const posts = [
+    {
+      id: 1,
+      title: "Next.js와 Vercel로 나만의 웹사이트 배포하기",
+      date: "2026년 9월 15일",
+      category: "Development",
+      summary: "복잡한 서버 설정 없이 Vercel을 이용해 Next.js 프로젝트를 쉽고 빠르게 배포하는 방법을 알아봅니다.",
+    },
+    {
+      id: 2,
+      title: "Supabase를 활용한 데이터베이스 기초 연동",
+      date: "2026년 9월 12일",
+      category: "Database",
+      summary: "백엔드 구축 없이 안전하게 데이터를 저장하고 관리할 수 있는 Supabase의 핵심 기능을 살펴봅니다.",
+    },
+    {
+      id: 3,
+      title: "Tailwind CSS로 트렌디한 UI 디자인 만들기",
+      date: "2026년 9월 10일",
+      category: "Design",
+      summary: "클래스 이름 몇 개만으로 모바일과 PC 화면에서 모두 완벽하게 반응하는 디자인을 구성하는 팁입니다.",
+    },
+  ];
+
   return (
-    <main className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-950 to-slate-900 text-white flex flex-col justify-between p-6 sm:p-12">
-      {/* 상단 헤더 */}
-      <header className="max-w-4xl mx-auto w-full flex justify-between items-center py-4 border-b border-white/10">
-        <h1 className="text-xl font-bold tracking-wider">MY PORTFOLIO</h1>
-        <span className="text-xs bg-emerald-500/20 text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/30">
-          ● Live Online
-        </span>
+    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col justify-between">
+      {/* 블로그 헤더 */}
+      <header className="border-b border-slate-200 bg-white sticky top-0 z-10">
+        <div className="max-w-4xl mx-auto px-6 h-16 flex justify-between items-center">
+          <h1 className="text-xl font-bold tracking-tight text-slate-900 cursor-pointer">
+            ✨ My Dev Log
+          </h1>
+          <nav className="flex gap-6 text-sm font-medium text-slate-600">
+            <span className="hover:text-blue-600 cursor-pointer transition-colors">Home</span>
+            <span className="hover:text-blue-600 cursor-pointer transition-colors">About</span>
+            <a 
+              href="https://github.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="hover:text-blue-600 transition-colors"
+            >
+              GitHub
+            </a>
+          </nav>
+        </div>
       </header>
 
-      {/* 메인 소개 영역 */}
-      <section className="max-w-4xl mx-auto w-full my-auto py-12 flex flex-col items-center text-center">
-        <div className="w-24 h-24 rounded-full bg-gradient-to-r from-pink-500 to-violet-500 flex items-center justify-center text-3xl font-bold mb-6 shadow-lg shadow-purple-500/30">
-          🚀
-        </div>
-        <h2 className="text-4xl sm:text-6xl font-extrabold tracking-tight mb-4 bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-slate-400">
-          안녕하세요, 반갑습니다!
-        </h2>
-        <p className="text-slate-400 text-lg sm:text-xl max-w-xl mb-8 leading-relaxed">
-          Next.js와 Supabase, 그리고 Vercel을 활용해 멋진 나만의 웹사이트를 성공적으로 구축하고 배포했습니다.
-        </p>
+      {/* 블로그 메인 콘텐츠 */}
+      <main className="max-w-4xl mx-auto px-6 py-12 w-full flex-grow">
+        {/* 블로그 소개 인트로 */}
+        <section className="mb-12 text-center sm:text-left">
+          <h2 className="text-3xl sm:text-4xl font-extrabold text-slate-900 mb-3 tracking-tight">
+            개발과 일상을 기록하는 공간입니다.
+          </h2>
+          <p className="text-slate-600 text-lg">
+            Next.js, Supabase, Vercel을 이용해 직접 만들어가는 성장의 기록들입니다.
+          </p>
+        </section>
 
-        {/* 버튼 그룹 */}
-        <div className="flex flex-wrap gap-4 justify-center">
-          <a
-            href="https://github.com"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="bg-white text-slate-900 font-semibold px-6 py-3 rounded-xl hover:bg-slate-200 transition-all shadow-md"
-          >
-            GitHub 구경하기
-          </a>
-          <button 
-            onClick={() => alert('방문해 주셔서 감사합니다!')}
-            className="bg-purple-600 hover:bg-purple-500 text-white font-semibold px-6 py-3 rounded-xl transition-all shadow-lg shadow-purple-600/30"
-          >
-            인사 남기기
-          </button>
-        </div>
-      </section>
+        {/* 글 목록 카드 그리드 */}
+        <section className="grid gap-6">
+          {posts.map((post) => (
+            <article 
+              key={post.id}
+              className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <span className="text-xs font-semibold bg-blue-50 text-blue-600 px-3 py-1 rounded-full border border-blue-100">
+                  {post.category}
+                </span>
+                <span className="text-xs text-slate-400">{post.date}</span>
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 group-hover:text-blue-600 transition-colors mb-2">
+                {post.title}
+              </h3>
+              <p className="text-slate-600 text-sm leading-relaxed">
+                {post.summary}
+              </p>
+            </article>
+          ))}
+        </section>
+      </main>
 
-      {/* 하단 푸터 */}
-      <footer className="max-w-4xl mx-auto w-full text-center text-xs text-slate-500 py-4 border-t border-white/10">
-        © 2026 My Website. Powered by Next.js & Vercel.
+      {/* 블로그 푸터 */}
+      <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-400">
+        <p>© 2026 My Dev Log. All rights reserved. Powered by Next.js & Vercel.</p>
       </footer>
-    </main>
+    </div>
   );
 }
