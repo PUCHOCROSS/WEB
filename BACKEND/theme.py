@@ -37,6 +37,8 @@ PILL = {
     "stopped": (AMBER, "#382E12"),
     "fail": (RED, "#3A1A1D"),
     "idle": (MUTED, "#232839"),
+    "stopping": (AMBER, "#382E12"),
+    "soon": (MUTED, "#232839"),
 }
 
 
@@ -46,39 +48,43 @@ def font(size=10, weight="normal"):
 
 # ── 재사용 위젯 ───────────────────────────────────────────────────────────
 class FlatButton(tk.Label):
-    """플랫 스타일 버튼 (hover 효과 포함)"""
+    """플랫 스타일 버튼 (hover / 비활성 상태 지원)"""
 
     STYLES = {
         "primary": (ACCENT_BTN, ACCENT_HOVER, "#FFFFFF"),
         "danger": ("#3A1A1D", "#4E2227", RED),
         "ghost": (SURFACE_2, "#2E3752", TEXT),
     }
+    DISABLED = ("#232839", "#232839", "#5A6278")
 
     def __init__(self, parent, text, command=None, kind="primary", **kw):
         super().__init__(
-            parent, text=text, font=font(9, "bold"), cursor="hand2",
-            padx=14, pady=6, **kw
+            parent, text=text, font=font(9, "bold"), padx=14, pady=6, **kw
         )
         self.kind = kind
         self.command = command
+        self.enabled = True
         self._paint(False)
         self.bind("<Enter>", lambda e: self._paint(True))
         self.bind("<Leave>", lambda e: self._paint(False))
         self.bind("<Button-1>", self._on_click)
 
     def _paint(self, hover):
-        bg, hover_bg, fg = self.STYLES[self.kind]
-        self.config(bg=hover_bg if hover else bg, fg=fg)
+        bg, hover_bg, fg = self.STYLES[self.kind] if self.enabled else self.DISABLED
+        self.config(bg=hover_bg if (hover and self.enabled) else bg, fg=fg,
+                    cursor="hand2" if self.enabled else "arrow")
 
     def _on_click(self, _e):
-        if self.command:
+        if self.enabled and self.command:
             self.command()
 
-    def set(self, text=None, kind=None):
+    def set(self, text=None, kind=None, enabled=None):
         if text is not None:
             self.config(text=text)
         if kind is not None:
             self.kind = kind
+        if enabled is not None:
+            self.enabled = enabled
         self._paint(False)
 
 
@@ -142,6 +148,138 @@ def bind_recursive(widget, sequence, func, skip=()):
         bind_recursive(child, sequence, func, skip)
 
 
+# ── 토스트 알림 (팝업창 대신 우측 하단에 잠깐 표시) ───────────────────────
+_TOASTS = {}
+
+
+def toast(widget, text, kind="info", ms=None):
+    """kind: info / ok / warn / err. 클릭하면 바로 닫힙니다."""
+    try:
+        root = widget.winfo_toplevel()
+    except Exception:
+        return
+    key = str(root)
+    old = _TOASTS.pop(key, None)
+    if old:
+        try:
+            old.destroy()
+        except Exception:
+            pass
+    color = {"info": ACCENT, "ok": GREEN, "warn": AMBER, "err": RED}.get(kind, ACCENT)
+    f = tk.Frame(root, bg=SURFACE_2, highlightthickness=1, highlightbackground=BORDER)
+    tk.Frame(f, bg=color, width=4).pack(side="left", fill="y")
+    tk.Label(f, text=text, font=font(9), fg=TEXT, bg=SURFACE_2, padx=14, pady=10,
+             justify="left", wraplength=380, cursor="hand2").pack(side="left")
+    f.place(relx=1.0, rely=1.0, anchor="se", x=-24, y=-24)
+    f.lift()
+    _TOASTS[key] = f
+
+    def dismiss(_e=None):
+        try:
+            f.destroy()
+        except Exception:
+            pass
+        if _TOASTS.get(key) is f:
+            _TOASTS.pop(key, None)
+
+    f.bind("<Button-1>", dismiss)
+    for c in f.winfo_children():
+        c.bind("<Button-1>", dismiss)
+    duration = ms or (5000 if kind in ("warn", "err") else 2800)
+    root.after(duration, dismiss)
+
+
+def make_dialog(parent, title, w, h):
+    """부모 창 중앙에 뜨는 모달. Esc로 닫힘."""
+    root = parent.winfo_toplevel()
+    dlg = tk.Toplevel(root)
+    dlg.title(title)
+    dlg.configure(bg=BG)
+    dlg.resizable(False, False)
+    dlg.transient(root)
+    x = root.winfo_rootx() + max(0, (root.winfo_width() - w) // 2)
+    y = root.winfo_rooty() + max(0, (root.winfo_height() - h) // 2)
+    dlg.geometry(f"{w}x{h}+{x}+{y}")
+    dlg.bind("<Escape>", lambda e: dlg.destroy())
+    try:
+        dlg.wait_visibility()
+        dlg.grab_set()
+    except tk.TclError:
+        pass
+    dlg.focus_set()
+    return dlg
+
+
+class LogBox(tk.Frame):
+    """읽기 전용 로그창: 색상 태그 / 자동 스크롤 / 최대 줄 수 제한 / 우클릭 메뉴"""
+
+    TAGS = {"sys": ACCENT, "err": RED, "ok": GREEN, "warn": AMBER}
+
+    def __init__(self, parent, height=None, max_lines=2000, bg=SURFACE):
+        super().__init__(parent, bg=bg)
+        self.max_lines = max_lines
+        self.autoscroll = tk.BooleanVar(value=True)
+
+        sb = ttk.Scrollbar(self, orient="vertical")
+        sb.pack(side="right", fill="y")
+        opts = {"height": height} if height else {}
+        self.text = tk.Text(
+            self, bg=FIELD, fg="#CBD3E6", insertbackground="white",
+            font=(MONO, 9), wrap="word", relief="flat", bd=0, padx=12, pady=8,
+            highlightthickness=1, highlightbackground=BORDER,
+            highlightcolor=BORDER, state="disabled",
+            yscrollcommand=sb.set, **opts,
+        )
+        self.text.pack(side="left", fill="both", expand=True)
+        sb.config(command=self.text.yview)
+        for name, color in self.TAGS.items():
+            self.text.tag_configure(name, foreground=color)
+
+        menu = tk.Menu(self.text, tearoff=0, bg=SURFACE_2, fg=TEXT,
+                       activebackground=ACCENT_BTN, activeforeground="#FFFFFF", bd=0)
+        menu.add_command(label="선택 복사", command=self._copy_sel)
+        menu.add_command(label="전체 복사", command=self.copy_all)
+        menu.add_separator()
+        menu.add_command(label="로그 지우기", command=self.clear)
+        self.text.bind("<Button-3>", lambda e: menu.tk_popup(e.x_root, e.y_root))
+        self.text.bind("<Button-1>", lambda e: self.text.focus_set(), add="+")
+
+    def tag(self, name, **kw):
+        self.text.tag_configure(name, **kw)
+
+    def append(self, msg, *tags, prefix=None, prefix_tags=()):
+        """prefix: 줄 앞의 색상 라벨 (예: [FE]). tags/prefix_tags 에 같은 '소스 태그'를
+        넣어 두면 tag(name, elide=True) 로 특정 소스의 줄을 숨길 수 있다."""
+        t = self.text
+        t.config(state="normal")
+        if prefix:
+            t.insert("end", prefix + " ", prefix_tags)
+        t.insert("end", msg + "\n", tags)
+        lines = int(t.index("end-1c").split(".")[0])
+        if lines > self.max_lines:
+            t.delete("1.0", f"{lines - self.max_lines + 1}.0")
+        t.config(state="disabled")
+        if self.autoscroll.get():
+            t.see("end")
+
+    def clear(self):
+        self.text.config(state="normal")
+        self.text.delete("1.0", "end")
+        self.text.config(state="disabled")
+
+    def copy_all(self):
+        self.clipboard_clear()
+        self.clipboard_append(self.text.get("1.0", "end-1c"))
+
+    def _copy_sel(self):
+        try:
+            sel = self.text.get("sel.first", "sel.last")
+        except tk.TclError:
+            return
+        self.clipboard_clear()
+        self.clipboard_append(sel)
+
+
 # ── ttk 전역 스타일 ───────────────────────────────────────────────────────
 def apply_theme(root):
     root.configure(bg=BG)
@@ -188,6 +326,14 @@ def apply_theme(root):
           bordercolor=[("focus", ACCENT)],
           lightcolor=[("focus", ACCENT)],
           darkcolor=[("focus", ACCENT)])
+
+    s.configure("TSpinbox", fieldbackground=FIELD, foreground=TEXT, background=SURFACE_2,
+                arrowcolor=MUTED, bordercolor=BORDER, lightcolor=BORDER,
+                darkcolor=BORDER, insertcolor=TEXT, padding=5)
+    s.map("TSpinbox", bordercolor=[("focus", ACCENT)],
+          lightcolor=[("focus", ACCENT)], darkcolor=[("focus", ACCENT)])
+    s.configure("Err.TLabel", foreground=RED, font=(FONT, 9))
+    s.configure("CardErr.TLabel", background=SURFACE, foreground=RED, font=(FONT, 9))
 
     s.configure("TCombobox", fieldbackground=FIELD, background=SURFACE_2,
                 foreground=TEXT, arrowcolor=MUTED, bordercolor=BORDER,

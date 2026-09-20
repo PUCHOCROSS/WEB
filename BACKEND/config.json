@@ -1,4 +1,8 @@
 {
     "frontend": "C:/DEV/WEB/FRONTEND",
-    "backend": "C:/DEV/WEB/BACKEND"
+    "backend": "C:/DEV/WEB/BACKEND",
+    "frontend_cmd": "npm run dev",
+    "frontend_port": "3000",
+    "backend_cmd": "npm run dev",
+    "backend_port": "8080"
 }

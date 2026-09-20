@@ -1,169 +1,288 @@
-import csv
-import threading
-import time
-import urllib.parse
-import webbrowser
+import queue
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
-
-# Selenium 관련 라이브러리
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from webdriver_manager.chrome import ChromeDriverManager
+from tkinter import ttk
 
 import theme as T
+from engine import PLATFORMS, SPEEDS, Job, fmt_duration, validate
+from result_table import PreviewPanel, ResultTable
+from store import STORE
+from theme import FlatButton, Pill
 
 
 class PageCrawling(ttk.Frame):
+    """수집 실행 화면. 대시보드/예약/히스토리의 모든 수집 요청은 이 페이지를 통해 실행됩니다."""
 
     def __init__(self, parent, controller=None):
         super().__init__(parent)
         self.controller = controller
-        self.is_running = False
-        self.stop_requested = False
-
-        # 대시보드 등 외부에서 상태를 구독하기 위한 리스너 목록
+        self.job = None
         self.listeners = []
-        self.current_keyword = ""
-        self.current_count = 0
-        self.current_percent = 0
-        self.last_error = None
+        self._poll_id = None
+        self._last_notify = None
+        self._fetch_preview = False
+        self._finished_job = None
 
-        self.keyword_var = tk.StringVar(value="아파트")
-        self.max_pages_var = tk.StringVar(value="3")
-        self.status_var = tk.StringVar(value="준비 완료 · 목록의 항목을 더블클릭하면 해당 링크가 열립니다.")
+        # 콤보박스에 보이는 이름 <-> 플랫폼 key
+        self.ready = [p for p in PLATFORMS.values() if p.ready]
+        self.display = {p.key: self._display(p) for p in self.ready}
+        self.key_of = {v: k for k, v in self.display.items()}
+
+        last = STORE.get("last_platform")
+        first_key = last if last in self.display else self.ready[0].key
+        self.platform_var = tk.StringVar(value=self.display[first_key])
+        self.query_var = tk.StringVar()
+        self.pages_var = tk.StringVar()
+        self.speed_var = tk.StringVar(value=STORE.get("speed", "보통"))
+        self.headless_var = tk.BooleanVar(value=STORE.get("headless", False))
+        self.chrome_var = tk.StringVar(value=STORE.get("chrome_version", ""))
+        self.status_var = tk.StringVar(value="준비 완료 · 수집할 대상과 키워드를 입력하세요.")
 
         self.create_widgets()
+        self._on_platform_change()
 
-    # ------------------------------------------------------------------
-    # 외부 연동용 API
-    # ------------------------------------------------------------------
+    @staticmethod
+    def _display(p):
+        return p.label if not p.badge else f"{p.label}  [{p.badge}]"
+
+    # ══════════════════════════════════════════════════════════════════
+    # 외부(대시보드/히스토리/예약)에서 쓰는 공개 API
+    # ══════════════════════════════════════════════════════════════════
+    @property
+    def is_running(self):
+        return self.job is not None
+
+    @property
+    def running_platform(self):
+        return self.job.platform.key if self.job else None
+
     def add_listener(self, callback):
-        """callback(state, count, percent, keyword) — state: running/done/stopped/fail
-        (항상 메인(UI) 스레드에서 호출됨)"""
+        """callback(info: dict)  info = state/platform/count/percent/query/elapsed"""
         self.listeners.append(callback)
 
-    def _notify(self, state):
-        for cb in self.listeners:
-            try:
-                cb(state, self.current_count, self.current_percent, self.current_keyword)
-            except Exception as e:
-                print("listener error:", e)
+    def select_platform(self, key):
+        if key in self.display and not self.is_running:
+            self.platform_var.set(self.display[key])
+            self._on_platform_change()
 
-    def run_from_dashboard(self, keyword, max_pages):
-        """대시보드에서 호출: 키워드/페이지 수를 채우고 바로 크롤링 시작"""
-        if self.is_running:
+    def run_from_dashboard(self, platform_key, query, pages):
+        return self.start_job(platform_key, query, pages)
+
+    def start_job(self, platform_key, query, pages):
+        if self.job:
+            T.toast(self, "이미 수집이 진행 중입니다. 끝난 뒤에 다시 시도해 주세요.", "warn")
             return False
-        self.keyword_var.set(keyword)
-        self.max_pages_var.set(str(max_pages))
-        self.start_crawling()
-        return self.is_running
+        platform = PLATFORMS.get(platform_key)
+        if not platform:
+            return False
+        err = validate(platform, query, pages)
+        if err:
+            self._set_error(err)
+            T.toast(self, err, "warn")
+            return False
 
-    # ------------------------------------------------------------------
+        self.select_platform(platform_key)
+        self.query_var.set(query.strip())
+        self.pages_var.set(str(pages))
+        self._set_error("")
+        STORE.update(last_platform=platform_key, speed=self.speed_var.get(),
+                     headless=self.headless_var.get(), chrome_version=self.chrome_var.get().strip(),
+                     **{f"query.{platform_key}": query.strip(), f"pages.{platform_key}": pages})
+
+        job = Job(platform, query, pages, speed=self.speed_var.get(),
+                  headless=self.headless_var.get(), chrome_version=self.chrome_var.get())
+        self.job = job
+        self._fetch_preview = platform.preview_fetch
+
+        # 화면 초기화
+        self.table.clear()
+        self.table.export_name = platform.label if platform.is_url else f"{platform.label}_{query.strip()}"
+        self.preview.clear()
+        self.log_box.clear()
+        self.progress["value"] = 0
+        self._lock(True)
+        self.pill.set("running", "수집 중")
+        self.status_var.set(f"[{platform.label}] '{query.strip()[:60]}' 수집 중...")
+        self._last_notify = None
+        job.start()
+        self._notify()
+        self._poll()
+        return True
+
+    def stop_crawling(self):
+        job = self.job
+        if not job or job.stopped():
+            return
+        job.request_stop()
+        self.log("🛑 중지 요청을 받았습니다. 브라우저를 닫는 중...")
+        self.btn_stop.state(["disabled"])
+        self.pill.set("stopping", "중지하는 중")
+        self.status_var.set("중지하는 중...")
+        self._notify()
+
+    def shutdown(self):
+        """앱 종료 시 호출: 브라우저 정리"""
+        if self.job:
+            self.job.shutdown()
+
+    def on_show(self):
+        if not self.is_running:
+            self.query_cb.focus_set()
+
+    # ══════════════════════════════════════════════════════════════════
     # UI
-    # ------------------------------------------------------------------
+    # ══════════════════════════════════════════════════════════════════
     def create_widgets(self):
-        # 하단 상태바 (먼저 pack 해야 창이 작아져도 항상 보임)
         ttk.Label(self, textvariable=self.status_var, style="Status.TLabel",
                   anchor="w").pack(fill="x", side="bottom", pady=(10, 0))
 
-        header, _ = T.page_header(
-            self, "Crawling", "네이버 뉴스 키워드 수집 (Selenium)")
+        header, right = T.page_header(
+            self, "Crawling", "수집할 플랫폼을 고르고 키워드(또는 URL)를 입력해 데이터를 수집합니다.")
         header.pack(fill="x")
+        self.pill = Pill(right, "idle", "대기")
+        self.pill.pack()
 
         # ── 수집 설정 ──
         setting = T.section(self, "수집 설정")
         setting.pack(fill="x", pady=(0, 10))
+        setting.columnconfigure(3, weight=1)
 
-        row = ttk.Frame(setting, style="Card.TFrame")
-        row.pack(fill="x")
-        ttk.Label(row, text="검색 키워드", style="Card.TLabel").grid(row=0, column=0, sticky="w")
-        ttk.Entry(row, textvariable=self.keyword_var, width=30).grid(
-            row=0, column=1, padx=(10, 22))
-        ttk.Label(row, text="수집 페이지 수", style="Card.TLabel").grid(row=0, column=2, sticky="w")
-        ttk.Entry(row, textvariable=self.max_pages_var, width=6).grid(
-            row=0, column=3, padx=(10, 0))
+        ttk.Label(setting, text="수집 대상", style="Card.TLabel").grid(row=0, column=0, sticky="w")
+        self.platform_cb = ttk.Combobox(
+            setting, textvariable=self.platform_var, state="readonly", width=20,
+            values=[self.display[p.key] for p in self.ready])
+        self.platform_cb.grid(row=0, column=1, padx=(10, 22), sticky="w")
+        self.platform_cb.bind("<<ComboboxSelected>>", self._on_platform_change)
+
+        self.lbl_query = ttk.Label(setting, text="검색 키워드", style="Card.TLabel")
+        self.lbl_query.grid(row=0, column=2, sticky="w")
+        self.query_cb = ttk.Combobox(setting, textvariable=self.query_var)
+        self.query_cb.grid(row=0, column=3, padx=(10, 22), sticky="ew")
+        self.query_cb.bind("<Return>", lambda e: self.on_start_click())
+        self.query_var.trace_add("write", lambda *_: self._set_error(""))
+
+        self.lbl_pages = ttk.Label(setting, text="페이지 수", style="Card.TLabel")
+        self.lbl_pages.grid(row=0, column=4, sticky="w")
+        self.spin_pages = ttk.Spinbox(setting, from_=1, to=200, width=5,
+                                      textvariable=self.pages_var)
+        self.spin_pages.grid(row=0, column=5, padx=(10, 0), sticky="w")
+        self.spin_pages.bind("<Return>", lambda e: self.on_start_click())
+
+        self.lbl_hint = ttk.Label(setting, text="", style="CardMuted.TLabel")
+        self.lbl_hint.grid(row=1, column=1, columnspan=5, sticky="w", padx=(10, 0), pady=(4, 0))
+        self.lbl_err = ttk.Label(setting, text="", style="CardErr.TLabel")
+        self.lbl_err.grid(row=2, column=1, columnspan=5, sticky="w", padx=(10, 0))
+
+        opts = ttk.Frame(setting, style="Card.TFrame")
+        opts.grid(row=3, column=0, columnspan=6, sticky="ew", pady=(10, 0))
+        ttk.Label(opts, text="수집 속도", style="Card.TLabel").pack(side="left")
+        self.speed_cb = ttk.Combobox(opts, textvariable=self.speed_var, state="readonly",
+                                     width=6, values=list(SPEEDS.keys()))
+        self.speed_cb.pack(side="left", padx=(8, 4))
+        ttk.Label(opts, text="느릴수록 차단 위험이 낮아요", style="CardMuted.TLabel").pack(
+            side="left", padx=(0, 22))
+        self.chk_headless = ttk.Checkbutton(opts, text="브라우저 숨김 (백그라운드 실행)",
+                                            variable=self.headless_var, style="Card.TCheckbutton")
+        self.chk_headless.pack(side="left", padx=(0, 22))
+        ttk.Label(opts, text="Chrome 버전", style="Card.TLabel").pack(side="left")
+        self.ent_chrome = ttk.Entry(opts, textvariable=self.chrome_var, width=5)
+        self.ent_chrome.pack(side="left", padx=(8, 4))
+        ttk.Label(opts, text="버전 오류가 날 때만 입력", style="CardMuted.TLabel").pack(side="left")
 
         btn_row = ttk.Frame(setting, style="Card.TFrame")
-        btn_row.pack(fill="x", pady=(14, 0))
-
-        self.btn_start = ttk.Button(btn_row, text="▶  크롤링 시작",
-                                    style="Accent.TButton", command=self.start_crawling)
+        btn_row.grid(row=4, column=0, columnspan=6, sticky="ew", pady=(14, 0))
+        self.btn_start = ttk.Button(btn_row, text="▶  수집 시작", style="Accent.TButton",
+                                    command=self.on_start_click)
         self.btn_start.pack(side="left")
-
         self.btn_stop = ttk.Button(btn_row, text="■  중지", style="Danger.TButton",
                                    command=self.stop_crawling, state="disabled")
         self.btn_stop.pack(side="left", padx=(8, 0))
+        self.progress = ttk.Progressbar(btn_row, orient="horizontal", mode="determinate", maximum=100)
+        self.progress.pack(side="left", fill="x", expand=True, padx=(18, 12))
+        self.lbl_info = ttk.Label(btn_row, text="0건 · 0% · 00:00", style="Card.TLabel", width=20,
+                                  anchor="e")
+        self.lbl_info.pack(side="left")
 
-        self.progress = ttk.Progressbar(btn_row, orient="horizontal", mode="determinate")
-        self.progress.pack(side="left", fill="x", expand=True, padx=(18, 0))
+        # ── 결과 / 미리보기 / 로그 (경계선을 끌어 크기 조절 가능) ──
+        self.paned = tk.PanedWindow(self, orient="vertical", bg=T.BG, bd=0,
+                                    sashwidth=8, sashrelief="flat", opaqueresize=True)
+        self.paned.pack(fill="both", expand=True)
 
-        # ── 로그 ──
-        log_frame = T.section(self, "실시간 탐색 로그")
-        log_frame.pack(fill="x", pady=(0, 10))
+        result_frame = T.section(self.paned, "수집 결과")
+        self.table = ResultTable(result_frame, on_select=self._on_row_select,
+                                 on_change=self._refresh_info)
+        self.table.pack(fill="both", expand=True)
+        self.paned.add(result_frame, minsize=150, stretch="always")
 
-        self.log_text = tk.Text(
-            log_frame, height=5, state="disabled", bg=T.FIELD, fg=T.SUBTEXT,
-            font=(T.MONO, 9), relief="flat", bd=0, padx=10, pady=8,
-            highlightthickness=1, highlightbackground=T.BORDER,
-            highlightcolor=T.BORDER, wrap="word",
-        )
-        self.log_text.pack(fill="x", expand=True)
-        self.log_text.tag_configure("err", foreground=T.RED)
-        self.log_text.tag_configure("ok", foreground=T.GREEN)
-        self.log_text.tag_configure("warn", foreground=T.AMBER)
+        bottom = tk.PanedWindow(self.paned, orient="horizontal", bg=T.BG, bd=0,
+                                sashwidth=8, sashrelief="flat", opaqueresize=True)
+        prev_frame = T.section(bottom, "선택 항목 미리보기")
+        self.preview = PreviewPanel(prev_frame)
+        self.preview.pack(fill="both", expand=True)
+        log_frame = T.section(bottom, "실시간 로그  (우클릭: 복사 / 지우기)")
+        self.log_box = T.LogBox(log_frame, height=5)
+        self.log_box.pack(fill="both", expand=True)
+        bottom.add(prev_frame, minsize=220, stretch="always")
+        bottom.add(log_frame, minsize=220, stretch="always")
+        self.paned.add(bottom, minsize=110, stretch="never")
+        self.after(250, self._init_sash)
 
-        # ── 결과 ──
-        result_frame = T.section(self, "수집 결과")
-        result_frame.pack(fill="both", expand=True)
+    def _init_sash(self):
+        try:
+            h = self.paned.winfo_height()
+            if h > 320:
+                self.paned.sash_place(0, 0, h - 190)
+        except tk.TclError:
+            pass
 
-        export_bar = ttk.Frame(result_frame, style="Card.TFrame")
-        export_bar.pack(fill="x", pady=(0, 8))
-        ttk.Label(export_bar, text="항목을 더블클릭하면 기사 페이지가 열립니다",
-                  style="CardMuted.TLabel").pack(side="left")
-        ttk.Button(export_bar, text="CSV로 내보내기",
-                   command=self.export_to_csv).pack(side="right")
+    # ── 입력 ────────────────────────────────────────────────────────────
+    @property
+    def current_key(self):
+        return self.key_of.get(self.platform_var.get(), self.ready[0].key)
 
-        table = ttk.Frame(result_frame, style="Card.TFrame")
-        table.pack(fill="both", expand=True)
+    def _on_platform_change(self, _e=None):
+        key = self.current_key
+        p = PLATFORMS[key]
+        self.lbl_query.config(text=p.input_label)
+        self.lbl_pages.config(text=p.pages_label)
+        hint = f"{p.placeholder}   ·   {p.desc}"
+        if p.badge == "베타":
+            hint += "   ⚠ 베타: 사이트 구조가 바뀌면 engine.py 선택자 조정이 필요할 수 있어요."
+        self.lbl_hint.config(text=hint)
+        self.query_cb.config(values=STORE.recent_queries(key))
+        self.query_var.set(STORE.get(f"query.{key}", ""))
+        self.pages_var.set(str(STORE.get(f"pages.{key}", p.pages_default)))
+        self._set_error("")
+        if not self.is_running:
+            self.table.export_name = p.label
+            self._fetch_preview = p.preview_fetch
 
-        columns = ("no", "title", "link", "date")
-        self.tree = ttk.Treeview(table, columns=columns, show="headings")
+    def _set_error(self, msg):
+        self.lbl_err.config(text=f"⚠ {msg}" if msg else "")
 
-        self.tree.heading("no", text="번호")
-        self.tree.heading("title", text="제목", anchor="w")
-        self.tree.heading("link", text="링크", anchor="w")
-        self.tree.heading("date", text="수집일시")
+    def _lock(self, running):
+        ro = "disabled" if running else "readonly"
+        nm = "disabled" if running else "normal"
+        self.platform_cb.config(state=ro)
+        self.speed_cb.config(state=ro)
+        self.query_cb.config(state=nm)
+        self.spin_pages.config(state=nm)
+        self.ent_chrome.config(state=nm)
+        self.chk_headless.state(["disabled"] if running else ["!disabled"])
+        self.btn_start.state(["disabled"] if running else ["!disabled"])
+        self.btn_stop.state(["!disabled"] if running else ["disabled"])
 
-        self.tree.column("no", width=55, anchor="center", stretch=False)
-        self.tree.column("title", width=300, minwidth=160)
-        self.tree.column("link", width=200, minwidth=120)
-        self.tree.column("date", width=140, anchor="center", stretch=False)
-
-        # 줄무늬 행
-        self.tree.tag_configure("odd", background=T.SURFACE)
-        self.tree.tag_configure("even", background="#1F2534")
-
-        self.tree.bind("<Double-1>", self.on_item_double_click)
-
-        scrollbar = ttk.Scrollbar(table, orient="vertical", command=self.tree.yview)
-        self.tree.configure(yscroll=scrollbar.set)
-        scrollbar.pack(side="right", fill="y")
-        self.tree.pack(side="left", fill="both", expand=True)
-
-    def on_item_double_click(self, event):
-        selected_item = self.tree.selection()
-        if not selected_item:
+    def on_start_click(self):
+        if self.is_running:
             return
-        values = self.tree.item(selected_item[0]).get("values", [])
-        if len(values) >= 3:
-            url = values[2]
-            if url and str(url).startswith("http"):
-                self.log(f"🔗 웹 브라우저로 열기: {url}")
-                webbrowser.open(str(url))
+        try:
+            pages = int(self.pages_var.get().strip())
+        except ValueError:
+            self._set_error(f"{PLATFORMS[self.current_key].pages_label}는 숫자로 입력해 주세요.")
+            self.spin_pages.focus_set()
+            return
+        self.start_job(self.current_key, self.query_var.get(), pages)
 
+    # ── 로그 / 이벤트 처리 ──────────────────────────────────────────────
     def log(self, message):
         tag = ()
         if message.startswith("❌"):
@@ -172,207 +291,92 @@ class PageCrawling(ttk.Frame):
             tag = ("ok",)
         elif message.startswith(("⚠", "🛑", "⏹")):
             tag = ("warn",)
-        self.log_text.config(state="normal")
-        self.log_text.insert("end", f"{message}\n", tag)
-        self.log_text.see("end")
-        self.log_text.config(state="disabled")
+        self.log_box.append(message, *tag)
 
-    # ------------------------------------------------------------------
-    # 크롤링 제어
-    # ------------------------------------------------------------------
-    def start_crawling(self):
-        if self.is_running:
+    def _poll(self):
+        job = self.job
+        if not job:
             return
-
-        keyword = self.keyword_var.get().strip()
-        if not keyword:
-            messagebox.showwarning("경고", "검색 키워드를 입력해 주세요.")
-            return
-
         try:
-            max_pages = int(self.max_pages_var.get().strip())
-            if max_pages <= 0:
-                raise ValueError
-        except ValueError:
-            messagebox.showwarning("경고", "올바른 페이지 수를 입력해 주세요.")
-            return
+            for _ in range(300):
+                kind, payload = job.events.get_nowait()
+                if kind == "log":
+                    self.log(payload)
+                elif kind == "row":
+                    self.table.add_row(payload)
+                elif kind == "progress":
+                    self.progress["value"] = payload
+                elif kind == "end":
+                    self._finish(payload)
+                    return
+        except queue.Empty:
+            pass
+        self._refresh_info()
+        self._notify()
+        self._poll_id = self.after(100, self._poll)
 
-        self.is_running = True
-        self.stop_requested = False
-        self.last_error = None
-        self.current_keyword = keyword
-        self.current_count = 0
-        self.current_percent = 0
-
-        self.btn_start.config(state="disabled")
-        self.btn_stop.config(state="normal")
-        self.progress["value"] = 0
-        self.status_var.set(f"'{keyword}' 수집 중...")
-
-        self.log_text.config(state="normal")
-        self.log_text.delete("1.0", "end")
-        self.log_text.config(state="disabled")
-
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-
-        self._notify("running")
-
-        threading.Thread(
-            target=self._run_selenium_logic,
-            args=(keyword, max_pages),
-            daemon=True
-        ).start()
-
-    def _run_selenium_logic(self, keyword, max_pages):
-        chrome_options = Options()
-        chrome_options.add_argument("--start-maximized")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        chrome_options.add_argument(
-            "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-        )
-
-        driver = None
-        item_count = 0
-        encoded_keyword = urllib.parse.quote(keyword)
-
-        try:
-            self.after(0, self.log, "🚀 크롬 브라우저를 시작합니다...")
-            service = Service(ChromeDriverManager().install())
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-
-            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-
-            seen_links = set()
-
-            for page in range(max_pages):
-                if not self.is_running:
-                    break
-
-                start_num = page * 10 + 1
-                url = f"https://search.naver.com/search.naver?ssc=tab.news.all&where=news&query={encoded_keyword}&start={start_num}"
-
-                self.after(0, self.log, f"🔍 [{page + 1}/{max_pages} 페이지] 접속 중...")
-                driver.get(url)
-
-                time.sleep(1.5)
-                driver.execute_script("window.scrollTo(0, 500);")
-                time.sleep(0.5)
-                driver.execute_script("window.scrollTo(0, 1000);")
-                time.sleep(0.5)
-
-                candidates = driver.find_elements(By.CSS_SELECTOR, "div.news_wrap a, div.news_contents a, ul.list_news a, div.news_info a")
-
-                if not candidates:
-                    candidates = driver.find_elements(By.TAG_NAME, "a")
-
-                page_found = 0
-                for elem in candidates:
-                    if not self.is_running:
-                        break
-
-                    try:
-                        title = elem.text.strip()
-                        link = elem.get_attribute("href")
-
-                        if not title or not link or link in seen_links:
-                            continue
-
-                        if len(title) < 8:
-                            continue
-                        if "naver.com" in link and "news.naver.com" not in link and "n.news.naver.com" not in link:
-                            if "search.naver.com" in link or "help.naver.com" in link:
-                                continue
-
-                        seen_links.add(link)
-                        item_count += 1
-                        page_found += 1
-                        now_str = time.strftime("%Y-%m-%d %H:%M")
-
-                        row_data = (item_count, title, link, now_str)
-                        self.after(0, self._insert_row, row_data)
-                    except Exception:
-                        continue
-
-                self.after(0, self.log, f"   └ {page + 1} 페이지 수집 결과: {page_found}건")
-
-                progress_percent = int(((page + 1) / max_pages) * 100)
-                self.after(0, self._update_progress, progress_percent)
-
-        except Exception as e:
-            self.last_error = str(e)
-            self.after(0, self.log, f"❌ 에러 발생: {str(e)}")
-        finally:
-            if driver:
-                driver.quit()
-
-        self.after(0, self._finish_crawling, item_count)
-
-    def _insert_row(self, row_data):
-        tag = "odd" if row_data[0] % 2 else "even"
-        self.tree.insert("", "end", values=row_data, tags=(tag,))
-        self.current_count = row_data[0]
-        self._notify("running")
-
-    def _update_progress(self, val):
-        self.progress["value"] = val
-        self.current_percent = val
-        self._notify("running")
-
-    def _finish_crawling(self, total_count):
-        self.is_running = False
-        self.btn_start.config(state="normal")
-        self.btn_stop.config(state="disabled")
-        self.current_count = total_count
-
-        if self.stop_requested:
-            self.log(f"⏹ 중지됨: {total_count}건 수집 후 종료했습니다.")
-            self.status_var.set(f"중지됨 · {total_count}건 수집됨")
-            self._notify("stopped")
-        elif total_count > 0:
-            self.current_percent = 100
-            self.log(f"✅ 수집 완료: 총 {total_count}건의 기사를 수집했습니다.")
-            self.status_var.set(f"수집 완료 · 총 {total_count}건 수집됨. 목록을 더블클릭하면 기사 페이지로 이동합니다.")
-            self._notify("done")
-            messagebox.showinfo("완료", f"총 {total_count}개 데이터를 가져왔습니다.\n목록 항목을 더블클릭하면 브라우저로 열립니다.")
+    def _refresh_info(self):
+        job = self.job
+        if job:
+            text = f"{job.count:,}건 · {job.percent}% · {fmt_duration(job.elapsed)}"
         else:
-            self.log("⚠ 수집된 데이터가 없습니다.")
-            self.status_var.set("수집 실패")
-            self._notify("fail")
+            text = f"{len(self.table.rows):,}건 · {int(self.progress['value'])}%"
+        if self.lbl_info.cget("text") != text:
+            self.lbl_info.config(text=text)
 
-    def stop_crawling(self):
-        self.stop_requested = True
-        self.is_running = False
-        self.log("🛑 중지 버튼이 눌렸습니다.")
+    def _state(self):
+        if not self.job:
+            return "idle"
+        return "stopping" if self.job.stopped() else "running"
 
-    def export_to_csv(self):
-        items = self.tree.get_children()
-        if not items:
-            messagebox.showwarning("경고", "저장할 수집 데이터가 없습니다.")
+    def _notify(self, state=None, final=False):
+        job = self.job if not final else self._finished_job
+        if not job:
             return
+        info = {"state": state or self._state(), "platform": job.platform.key,
+                "count": job.count, "percent": job.percent,
+                "query": job.query, "elapsed": job.elapsed}
+        sig = (info["state"], info["count"], info["percent"])
+        if sig == self._last_notify and not final:
+            return
+        self._last_notify = sig
+        for cb in self.listeners:
+            try:
+                cb(info)
+            except Exception as e:
+                print("listener error:", e)
 
-        file_path = filedialog.asksaveasfilename(
-            defaultextension=".csv",
-            filetypes=[("CSV Files", "*.csv"), ("All Files", "*.*")],
-        )
+    def _finish(self, state):
+        job = self.job
+        rows = list(self.table.rows)         # 사용자가 지운 항목은 제외하고 저장
+        duration = job.elapsed
+        STORE.add_history(job.platform.key, job.query, job.pages, state, rows, duration)
 
-        if file_path:
-            with open(file_path, "w", newline="", encoding="utf-8-sig") as f:
-                writer = csv.writer(f)
-                writer.writerow(["번호", "제목", "링크", "수집일시"])
-                for item in items:
-                    writer.writerow(self.tree.item(item)["values"])
-            messagebox.showinfo("성공", "CSV 파일로 저장되었습니다.")
+        self._finished_job = job
+        self.job = None
+        self._lock(False)
+        total = len(rows)
+        if state == "done":
+            self.progress["value"] = 100
+            self.log(f"✅ 수집 완료: 총 {total}건 ({fmt_duration(duration)} 소요)")
+            self.pill.set("done", "완료")
+            self.status_var.set(f"수집 완료 · 총 {total}건 · 히스토리에 저장됨")
+            T.toast(self, f"수집 완료 · {total:,}건\n결과는 History 메뉴에도 저장됩니다.", "ok")
+        elif state == "stopped":
+            self.log(f"⏹ 중지됨: {total}건 수집 후 종료했습니다.")
+            self.pill.set("stopped", "중지됨")
+            self.status_var.set(f"중지됨 · {total}건 수집됨 (히스토리에 저장됨)")
+            T.toast(self, f"수집을 중지했습니다. ({total:,}건 저장)", "info")
+        else:
+            self.log("⚠ 수집된 데이터가 없습니다. 위 로그를 확인해 주세요.")
+            self.pill.set("fail", "실패")
+            self.status_var.set("수집 실패 · 로그를 확인하세요")
+            T.toast(self, "수집된 데이터가 없습니다. 로그를 확인해 주세요.", "warn")
 
+        self._refresh_info()
+        self._notify(state=state, final=True)
+        self._finished_job = None
+        self.query_cb.config(values=STORE.recent_queries(self.current_key))
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    root.title("웹 크롤러 (API 미사용)")
-    root.geometry("900x700")
-    T.apply_theme(root)
-
-    app = PageCrawling(root)
-    app.pack(fill="both", expand=True, padx=20, pady=16)
-
-    root.mainloop()
+    def _on_row_select(self, row):
+        self.preview.show_row(row, fetch=self._fetch_preview)
