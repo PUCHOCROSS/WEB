@@ -8,6 +8,7 @@ from page_crawling import PageCrawling
 from page_dashboard import PageDashboard
 from page_dev import PageDev
 from page_history import PageHistory
+from page_publish import PagePublish
 from store import STORE
 
 
@@ -75,6 +76,7 @@ class MainApp(tk.Tk):
         "Dashboard": "▦",
         "Crawling": "◎",
         "History": "◷",
+        "Publish": "☁",
     }
 
     def __init__(self):
@@ -101,6 +103,7 @@ class MainApp(tk.Tk):
             "Dashboard": PageDashboard,
             "Crawling": PageCrawling,
             "History": PageHistory,
+            "Publish": PagePublish,
         }
 
         self.pages = {}
@@ -158,7 +161,7 @@ class MainApp(tk.Tk):
             item.pack(fill="x", pady=1)
             self.sidebar_buttons[key] = item
 
-        tk.Label(self.sidebar_frame, text="v1.1", font=T.font(8),
+        tk.Label(self.sidebar_frame, text="v1.2", font=T.font(8),
                  bg=T.SIDEBAR, fg="#5E6780").pack(side="bottom", pady=14)
 
     def show_page(self, key):

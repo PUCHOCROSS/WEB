@@ -3,6 +3,7 @@ from tkinter import messagebox, ttk
 
 import theme as T
 from engine import PLATFORMS, fmt_duration
+from publish_service import publish_to_site
 from result_table import PreviewPanel, ResultTable
 from store import STORE
 from theme import FlatButton
@@ -57,13 +58,14 @@ class PageHistory(ttk.Frame):
 
         wrap = ttk.Frame(top, style="Card.TFrame")
         wrap.pack(fill="both", expand=True)
-        cols = ("started", "platform", "query", "count", "state", "dur")
+        cols = ("started", "platform", "query", "count", "state", "dur", "pub")
         self.jobs = ttk.Treeview(wrap, columns=cols, show="headings", height=5,
                                  selectmode="extended")
         for cid, text, w, anc, stretch in (
                 ("started", "일시", 130, "center", False), ("platform", "대상", 120, "w", False),
                 ("query", "키워드 / URL", 300, "w", True), ("count", "건수", 70, "center", False),
-                ("state", "상태", 80, "center", False), ("dur", "소요", 70, "center", False)):
+                ("state", "상태", 80, "center", False), ("dur", "소요", 70, "center", False),
+                ("pub", "홈페이지", 90, "center", False)):
             self.jobs.heading(cid, text=text, anchor="w" if anc == "w" else "center")
             self.jobs.column(cid, width=w, anchor=anc, stretch=stretch, minwidth=50)
         self.jobs.tag_configure("odd", background=T.SURFACE)
@@ -84,7 +86,7 @@ class PageHistory(ttk.Frame):
         bottom = tk.PanedWindow(self.paned, orient="horizontal", bg=T.BG, bd=0,
                                 sashwidth=8, sashrelief="flat", opaqueresize=True)
         res = T.section(bottom, "선택한 작업의 결과")
-        self.table = ResultTable(res, on_select=self._on_row_select,
+        self.table = ResultTable(res, on_select=self._on_row_select, on_publish=self._publish_rows,
                                  empty_text="위 목록에서 작업을 선택하세요")
         self.table.pack(fill="both", expand=True)
         prev = T.section(bottom, "선택 항목 미리보기")
@@ -119,7 +121,8 @@ class PageHistory(ttk.Frame):
             self.jobs.insert("", "end", iid=h["id"], tags=("odd" if i % 2 == 0 else "even",), values=(
                 h["started"][:16], p.label if p else h["platform"], h["query"],
                 f"{h['count']:,}", STATE_LABEL.get(h["state"], h["state"]),
-                fmt_duration(h.get("duration", 0))))
+                fmt_duration(h.get("duration", 0)),
+                "🌐 발행됨" if h.get("published") else "—"))
         total_rows = sum(h["count"] for h in recs)
         self.lbl_total.config(text=f"작업 {len(recs)}개 · 수집 {total_rows:,}건" if recs else "")
         if recs:
@@ -155,6 +158,14 @@ class PageHistory(ttk.Frame):
 
     def _on_row_select(self, row):
         self.preview.show_row(row, fetch=self._fetch_preview)
+
+    def _publish_rows(self, rows):
+        h = next((x for x in STORE.history if x["id"] == self._current_id), None)
+        if not h:
+            T.toast(self, "위 목록에서 작업을 선택하세요.", "warn")
+            return
+        publish_to_site(self, rows, h["platform"], h["query"], h["id"],
+                        on_done=lambda ok, _r: ok and self.reload())
 
     # ── 동작 ────────────────────────────────────────────────────────────
     def delete_selected(self):

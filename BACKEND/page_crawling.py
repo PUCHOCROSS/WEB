@@ -4,6 +4,7 @@ from tkinter import ttk
 
 import theme as T
 from engine import PLATFORMS, SPEEDS, Job, fmt_duration, validate
+from publish_service import publish_to_site
 from result_table import PreviewPanel, ResultTable
 from store import STORE
 from theme import FlatButton, Pill
@@ -21,6 +22,7 @@ class PageCrawling(ttk.Frame):
         self._last_notify = None
         self._fetch_preview = False
         self._finished_job = None
+        self._ctx = None          # 현재 결과 표의 출처: (플랫폼 key, 키워드, 히스토리 id)
 
         # 콤보박스에 보이는 이름 <-> 플랫폼 key
         self.ready = [p for p in PLATFORMS.values() if p.ready]
@@ -91,6 +93,7 @@ class PageCrawling(ttk.Frame):
         job = Job(platform, query, pages, speed=self.speed_var.get(),
                   headless=self.headless_var.get(), chrome_version=self.chrome_var.get())
         self.job = job
+        self._ctx = (platform.key, query.strip(), None)
         self._fetch_preview = platform.preview_fetch
 
         # 화면 초기화
@@ -209,7 +212,7 @@ class PageCrawling(ttk.Frame):
 
         result_frame = T.section(self.paned, "수집 결과")
         self.table = ResultTable(result_frame, on_select=self._on_row_select,
-                                 on_change=self._refresh_info)
+                                 on_change=self._refresh_info, on_publish=self._publish_rows)
         self.table.pack(fill="both", expand=True)
         self.paned.add(result_frame, minsize=150, stretch="always")
 
@@ -350,7 +353,8 @@ class PageCrawling(ttk.Frame):
         job = self.job
         rows = list(self.table.rows)         # 사용자가 지운 항목은 제외하고 저장
         duration = job.elapsed
-        STORE.add_history(job.platform.key, job.query, job.pages, state, rows, duration)
+        rec = STORE.add_history(job.platform.key, job.query, job.pages, state, rows, duration)
+        self._ctx = (job.platform.key, job.query, rec["id"])
 
         self._finished_job = job
         self.job = None
@@ -378,5 +382,16 @@ class PageCrawling(ttk.Frame):
         self._finished_job = None
         self.query_cb.config(values=STORE.recent_queries(self.current_key))
 
+        # 자동 발행: 정상 완료된 검색형 수집만 (실패/중지 결과는 올리지 않음)
+        if state == "done" and rows and not job.platform.is_url and STORE.get("publish.auto", False):
+            publish_to_site(self, rows, job.platform.key, job.query, rec["id"], quiet=True)
+
     def _on_row_select(self, row):
         self.preview.show_row(row, fetch=self._fetch_preview)
+
+    def _publish_rows(self, rows):
+        if not self._ctx:
+            T.toast(self, "먼저 수집을 실행하세요.", "warn")
+            return
+        key, query, rec_id = self._ctx
+        publish_to_site(self, rows, key, query, rec_id)

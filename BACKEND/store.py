@@ -105,6 +105,18 @@ class Store:
         _write(HISTORY_FILE, self.history)
         return rec
 
+    def mark_published(self, rec_id, result):
+        """홈페이지 발행 결과를 작업 기록에 표시"""
+        for h in self.history:
+            if h["id"] == rec_id:
+                h["published"] = {
+                    "at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "inserted": int(result.get("inserted", 0)),
+                    "duplicates": int(result.get("duplicates", 0)),
+                }
+                _write(HISTORY_FILE, self.history)
+                return
+
     def load_rows(self, rec_id):
         return [tuple(r) for r in _read(os.path.join(RESULT_DIR, rec_id + ".json"), [])]
 

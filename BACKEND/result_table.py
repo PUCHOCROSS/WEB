@@ -35,9 +35,10 @@ def _safe_name(text):
 
 class ResultTable(ttk.Frame):
 
-    def __init__(self, parent, on_select=None, on_change=None,
+    def __init__(self, parent, on_select=None, on_change=None, on_publish=None,
                  empty_text="수집 결과가 여기에 표시됩니다"):
         super().__init__(parent, style="Card.TFrame")
+        self.on_publish = on_publish        # 주면 '홈페이지 발행' 버튼이 생김: on_publish(rows)
         self.on_select = on_select
         self.on_change = on_change          # 행 수가 바뀔 때 호출 (선택 사항)
         self.empty_text = empty_text
@@ -68,6 +69,9 @@ class ResultTable(ttk.Frame):
         self.lbl_count.pack(side="right", padx=(12, 0))
         ttk.Button(bar, text="내보내기", command=self.export).pack(side="right", padx=(6, 0))
         ttk.Button(bar, text="표 복사", command=self.copy_table).pack(side="right")
+        if self.on_publish:
+            ttk.Button(bar, text="🌐 홈페이지 발행", style="Accent.TButton",
+                       command=self.publish).pack(side="right", padx=(0, 6))
 
         wrap = ttk.Frame(self, style="Card.TFrame")
         wrap.pack(fill="both", expand=True)
@@ -239,6 +243,15 @@ class ResultTable(ttk.Frame):
             return
         self._copy(self._tsv(rows))
         T.toast(self, f"{len(rows)}건을 복사했습니다. 엑셀에 바로 붙여넣을 수 있어요.", "ok")
+
+    # ── 홈페이지 발행 ───────────────────────────────────────────────────
+    def publish(self):
+        """선택한 항목, 선택이 없으면 현재 검색 조건에 보이는 전체를 발행"""
+        rows = self.selected_rows() or [r for r in self.rows if self._matches(r)]
+        if not rows:
+            T.toast(self, "발행할 데이터가 없습니다.", "warn")
+            return
+        self.on_publish(rows)
 
     # ── 내보내기 ────────────────────────────────────────────────────────
     def export(self):

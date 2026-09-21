@@ -39,3 +39,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Python 캐시
+__pycache__/
+*.pyc
+
+# Work Hub 실행 데이터 (발행 토큰 포함)
+data/
+
+# Next.js 로컬 개발용 저장 파일
+.data/
