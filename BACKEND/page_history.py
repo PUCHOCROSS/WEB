@@ -159,12 +159,12 @@ class PageHistory(ttk.Frame):
     def _on_row_select(self, row):
         self.preview.show_row(row, fetch=self._fetch_preview)
 
-    def _publish_rows(self, rows):
+    def _publish_rows(self, rows, overrides=None):
         h = next((x for x in STORE.history if x["id"] == self._current_id), None)
         if not h:
             T.toast(self, "위 목록에서 작업을 선택하세요.", "warn")
             return
-        publish_to_site(self, rows, h["platform"], h["query"], h["id"],
+        publish_to_site(self, rows, h["platform"], h["query"], h["id"], overrides=overrides,
                         on_done=lambda ok, _r: ok and self.reload())
 
     # ── 동작 ────────────────────────────────────────────────────────────

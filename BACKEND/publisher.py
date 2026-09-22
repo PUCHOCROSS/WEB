@@ -63,23 +63,33 @@ def _iso(text):
         return None
 
 
-def to_items(rows, platform_key, query):
-    """결과 행 (번호, 제목, 출처, 링크, 수집일시) -> API 로 보낼 dict 목록 (링크 기준 중복 제거)"""
+def to_items(rows, platform_key, query, overrides=None):
+    """결과 행 (번호, 제목, 출처, 링크, 수집일시) -> API 로 보낼 dict 목록 (링크 기준 중복 제거)
+
+    overrides: {link: {"title": str, "image": str}} - '발행 전 편집' 창에서 사용자가
+    고친 제목/대표 이미지(선택). 없으면 수집된 그대로 발행한다.
+    """
+    overrides = overrides or {}
     items, seen = [], set()
     for _no, title, source, link, date in rows:
         link = str(link).strip()
-        title = " ".join(str(title).split())
+        ov = overrides.get(link, {})
+        title = " ".join(str(ov.get("title") or title).split())
         if not title or not link.startswith(("http://", "https://")) or link in seen:
             continue
         seen.add(link)
-        items.append({
+        item = {
             "title": title[:300],
             "source": str(source)[:100],
             "link": link,
             "platform": platform_key,
             "query": str(query)[:100],
             "collectedAt": _iso(date),
-        })
+        }
+        image = str(ov.get("image") or "").strip()
+        if image.startswith(("http://", "https://")):
+            item["image"] = image[:600]
+        items.append(item)
     return items
 
 

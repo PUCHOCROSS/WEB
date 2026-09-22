@@ -17,11 +17,13 @@ def is_configured():
     return bool(STORE.get("publish.url", "").strip() and STORE.get("publish.token", "").strip())
 
 
-def publish_to_site(widget, rows, platform_key, query, history_id=None, quiet=False, on_done=None):
+def publish_to_site(widget, rows, platform_key, query, history_id=None, quiet=False, on_done=None,
+                    overrides=None):
     """rows 를 홈페이지로 발행. 시작했으면 True.
 
     quiet=True 이면 '발행 중' 안내를 생략한다 (자동 발행용).
     on_done(ok, 결과_또는_오류문구) 는 발행이 끝난 뒤 UI 스레드에서 호출된다.
+    overrides: {link: {"title":.., "image":..}} - '발행 전 편집' 창에서 고친 값 (선택).
     """
     global _busy
     platform = PLATFORMS.get(platform_key)
@@ -39,7 +41,7 @@ def publish_to_site(widget, rows, platform_key, query, history_id=None, quiet=Fa
         T.toast(widget, "홈페이지 연결이 설정되지 않았습니다.\n"
                         "Publish 메뉴에서 사이트 주소와 토큰을 먼저 저장하세요.", "warn")
         return False
-    items = to_items(rows, platform_key, query)
+    items = to_items(rows, platform_key, query, overrides=overrides)
     if not items:
         T.toast(widget, "발행할 링크가 없습니다.", "warn")
         return False

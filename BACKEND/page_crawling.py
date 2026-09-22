@@ -389,9 +389,9 @@ class PageCrawling(ttk.Frame):
     def _on_row_select(self, row):
         self.preview.show_row(row, fetch=self._fetch_preview)
 
-    def _publish_rows(self, rows):
+    def _publish_rows(self, rows, overrides=None):
         if not self._ctx:
             T.toast(self, "먼저 수집을 실행하세요.", "warn")
             return
         key, query, rec_id = self._ctx
-        publish_to_site(self, rows, key, query, rec_id)
+        publish_to_site(self, rows, key, query, rec_id, overrides=overrides)

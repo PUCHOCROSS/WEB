@@ -16,6 +16,7 @@ export type Deal = {
   platform: string; // 수집 대상 (naver_news / naver_blog / google)
   query: string; // 수집 키워드 → 홈페이지의 분류(태그)로 사용
   collectedAt: string | null; // ISO 8601
+  image: string | null; // 대표 이미지(썸네일) URL. 없으면 null
   publishedAt: string; // 홈페이지에 등록된 시각 (ISO 8601)
 };
 
@@ -72,6 +73,8 @@ export function parseItems(body: unknown): ParsedItems | null {
     seen.add(link);
 
     const t = typeof o.collectedAt === "string" ? Date.parse(o.collectedAt) : NaN;
+    // 이미지는 선택 항목이라, 값이 없거나 형식이 잘못돼도 항목 자체를 버리지 않고 null 로 저장한다.
+    const image = typeof o.image === "string" ? safeUrl(o.image) : null;
     items.push({
       title,
       link,
@@ -79,6 +82,7 @@ export function parseItems(body: unknown): ParsedItems | null {
       platform: clean(o.platform, 50),
       query: clean(o.query, 100),
       collectedAt: Number.isNaN(t) ? null : new Date(t).toISOString(),
+      image,
     });
   }
   return { items, received: raw.length, rejected };
@@ -108,6 +112,7 @@ type Row = {
   platform: string;
   query: string;
   collected_at: string | null;
+  image: string | null;
   published_at: string;
 };
 
@@ -138,6 +143,7 @@ const supabaseStore: DealStore = (() => {
         platform: r.platform,
         query: r.query,
         collectedAt: r.collected_at,
+        image: r.image ?? null,
         publishedAt: r.published_at,
       }));
     },
@@ -151,6 +157,7 @@ const supabaseStore: DealStore = (() => {
         platform: i.platform,
         query: i.query,
         collected_at: i.collectedAt,
+        image: i.image,
       }));
       // ignore-duplicates + return=representation → 응답에는 '새로 저장된 행'만 담긴다
       const res = await fetch(`${base()}?on_conflict=link`, {

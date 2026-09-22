@@ -246,12 +246,14 @@ class ResultTable(ttk.Frame):
 
     # ── 홈페이지 발행 ───────────────────────────────────────────────────
     def publish(self):
-        """선택한 항목, 선택이 없으면 현재 검색 조건에 보이는 전체를 발행"""
+        """선택한 항목, 선택이 없으면 현재 검색 조건에 보이는 전체를 발행.
+        발행 전에 제목/대표 이미지를 확인·수정할 수 있는 창을 먼저 띄운다."""
         rows = self.selected_rows() or [r for r in self.rows if self._matches(r)]
         if not rows:
             T.toast(self, "발행할 데이터가 없습니다.", "warn")
             return
-        self.on_publish(rows)
+        from edit_dialog import open_edit_dialog
+        open_edit_dialog(self, rows, self.on_publish)
 
     # ── 내보내기 ────────────────────────────────────────────────────────
     def export(self):
