@@ -12,6 +12,7 @@ import queue
 import threading
 import tkinter as tk
 import urllib.request
+import webbrowser
 from tkinter import ttk
 
 import theme as T
@@ -52,7 +53,9 @@ class EditDialog:
             link = str(r[3])
             self.overrides.setdefault(link, {"title": str(r[1]), "image": ""})
 
-        self.dlg = T.make_dialog(parent, "발행 전 확인 · 편집", 940, 800)
+        self.dlg = T.make_dialog(parent, "발행 전 확인 · 편집", 980, 660)
+        self.dlg.resizable(True, True)
+        self.dlg.minsize(760, 480)
         self._build()
         self._populate_list()
         if self.rows:
@@ -71,12 +74,26 @@ class EditDialog:
         root = tk.Frame(self.dlg, bg=T.BG)
         root.pack(fill="both", expand=True, padx=16, pady=14)
 
-        tk.Label(root, font=T.font(9), fg=T.SUBTEXT, bg=T.BG, justify="left", wraplength=900,
+        tk.Label(root, font=T.font(9), fg=T.SUBTEXT, bg=T.BG, justify="left", wraplength=940,
                  text=f"홈페이지에 발행할 {len(self.rows)}건입니다. 제목과 대표 이미지를 확인하고, "
                       "필요하면 직접 수정하세요.").pack(anchor="w", pady=(0, 10))
 
+        # 하단 버튼줄을 먼저 'bottom'에 배치해서, 내용이 많아 좁아져도 발행/취소 버튼이
+        # 화면 밖으로 밀려나지 않고 항상 보이도록 한다.
+        bottom = tk.Frame(root, bg=T.BG)
+        bottom.pack(side="bottom", fill="x", pady=(14, 0))
+        self.btn_auto = FlatButton(bottom, "✨ 이미지 없는 항목 자동 채우기", kind="ghost",
+                                   command=self._auto_fill_all)
+        self.btn_auto.pack(side="left")
+        self.lbl_progress = tk.Label(bottom, text="", font=T.font(8), fg=T.MUTED, bg=T.BG)
+        self.lbl_progress.pack(side="left", padx=10)
+
+        FlatButton(bottom, "취소", kind="ghost", command=self.dlg.destroy).pack(side="right")
+        self.btn_ok = FlatButton(bottom, "🌐 홈페이지에 발행", kind="primary", command=self._confirm)
+        self.btn_ok.pack(side="right", padx=(0, 8))
+
         body = tk.Frame(root, bg=T.BG)
-        body.pack(fill="both", expand=True)
+        body.pack(side="top", fill="both", expand=True)
 
         # 좌측: 목록
         left = tk.Frame(body, bg=T.SURFACE, highlightthickness=1, highlightbackground=T.BORDER)
@@ -122,8 +139,13 @@ class EditDialog:
         ent_img.pack(side="left", fill="x", expand=True, ipady=5)
         ent_img.bind("<Return>", lambda e: self._save_current())
         ent_img.bind("<FocusOut>", lambda e: self._save_current())
-        FlatButton(img_row, "적용", kind="ghost", command=self._save_current).pack(side="left", padx=(8, 0))
+        FlatButton(img_row, "📋 붙여넣기", kind="ghost", command=self._paste_image_url
+                  ).pack(side="left", padx=(8, 0))
+        FlatButton(img_row, "적용", kind="ghost", command=self._save_current).pack(side="left", padx=(4, 0))
         FlatButton(img_row, "지우기", kind="ghost", command=self._clear_image).pack(side="left", padx=(4, 0))
+        tk.Label(right, fg=T.MUTED, bg=T.BG, font=T.font(8), justify="left",
+                text="원문 페이지에서 이미지에 우클릭 → '이미지 주소 복사' 후 붙여넣기를 누르면 됩니다."
+                ).pack(anchor="w", pady=(2, 0))
 
         if not self._pil_ok:
             tk.Label(right, fg=T.AMBER, bg=T.BG, font=T.font(8), justify="left", wraplength=440,
@@ -135,22 +157,13 @@ class EditDialog:
         ttk.Checkbutton(right, text="이 항목은 발행하지 않음", variable=self.excl_var,
                        command=self._toggle_excl).pack(anchor="w", pady=(10, 0))
 
-        self.lbl_link = tk.Label(right, text="", font=T.font(8), fg=T.MUTED, bg=T.BG,
-                                 wraplength=460, justify="left")
-        self.lbl_link.pack(anchor="w", pady=(10, 0))
-
-        # 하단 버튼줄
-        bottom = tk.Frame(root, bg=T.BG)
-        bottom.pack(fill="x", pady=(14, 0))
-        self.btn_auto = FlatButton(bottom, "✨ 이미지 없는 항목 자동 채우기", kind="ghost",
-                                   command=self._auto_fill_all)
-        self.btn_auto.pack(side="left")
-        self.lbl_progress = tk.Label(bottom, text="", font=T.font(8), fg=T.MUTED, bg=T.BG)
-        self.lbl_progress.pack(side="left", padx=10)
-
-        FlatButton(bottom, "취소", kind="ghost", command=self.dlg.destroy).pack(side="right")
-        self.btn_ok = FlatButton(bottom, "🌐 홈페이지에 발행", kind="primary", command=self._confirm)
-        self.btn_ok.pack(side="right", padx=(0, 8))
+        link_row = tk.Frame(right, bg=T.BG)
+        link_row.pack(fill="x", pady=(10, 0))
+        self.lbl_link = tk.Label(link_row, text="", font=T.font(8), fg=T.MUTED, bg=T.BG,
+                                 wraplength=380, justify="left", anchor="w")
+        self.lbl_link.pack(side="left", fill="x", expand=True)
+        FlatButton(link_row, "🔗 원문 열기", kind="ghost", command=self._open_link
+                  ).pack(side="right", padx=(8, 0))
 
     # ── 목록 ────────────────────────────────────────────────────────────
     def _populate_list(self):
@@ -205,6 +218,23 @@ class EditDialog:
     def _clear_image(self):
         self.image_var.set("")
         self._save_current()
+
+    def _paste_image_url(self):
+        try:
+            text = self.dlg.clipboard_get().strip()
+        except tk.TclError:
+            T.toast(self.dlg, "클립보드가 비어 있습니다.", "warn")
+            return
+        if not text.startswith(("http://", "https://")):
+            T.toast(self.dlg, "클립보드에 이미지 주소(URL)가 없습니다.\n"
+                              "원문 페이지에서 이미지를 우클릭 → '이미지 주소 복사'를 먼저 해주세요.", "warn")
+            return
+        self.image_var.set(text)
+        self._save_current()
+
+    def _open_link(self):
+        if self._current_link:
+            webbrowser.open(self._current_link)
 
     def _toggle_excl(self):
         if not self._current_link:
