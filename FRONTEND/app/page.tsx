@@ -1,4 +1,5 @@
 import DealList from "../components/DealList";
+import VisitorCounter from "../components/VisitorCounter";
 import { listDeals, type Deal } from "../lib/deals";
 
 // 발행 API 가 새 항목을 저장하면 revalidatePath("/") 로 즉시 갱신됩니다.
@@ -22,9 +23,12 @@ export default async function Home() {
       <header className="border-b border-slate-200 bg-white sticky top-0 z-10">
         <div className="max-w-3xl mx-auto px-6 h-16 flex justify-between items-center">
           <h1 className="text-lg font-bold tracking-tight text-slate-900">{SITE_NAME}</h1>
-          {!failed && deals.length > 0 && (
-            <p className="text-sm text-slate-500">최근 등록 {deals.length}건</p>
-          )}
+          <div className="flex items-center gap-3">
+            {!failed && deals.length > 0 && (
+              <p className="text-sm text-slate-500">최근 등록 {deals.length}건</p>
+            )}
+            <VisitorCounter />
+          </div>
         </div>
       </header>
 
@@ -33,7 +37,7 @@ export default async function Home() {
           <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 mb-2">
             새로 올라온 쿠폰과 행사
           </h2>
-          <p className="text-slate-600">키워드별로 모아 온 최신 소식입니다. 제목을 누르면 원문으로 이동해요.</p>
+          <p className="text-slate-600">키워드별로 모아 온 최신 소식입니다. 카드를 누르면 자세히 볼 수 있어요.</p>
         </section>
 
         {failed ? (

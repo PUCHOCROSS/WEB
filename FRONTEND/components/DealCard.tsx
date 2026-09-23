@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Deal } from "../lib/deals";
 import { getPlatformMeta } from "./platformMeta";
 import Thumb from "./Thumb";
@@ -14,10 +15,8 @@ export default function DealCard({ deal }: { deal: Deal }) {
   const date = formatDate(deal.collectedAt ?? undefined);
 
   return (
-    <a
-      href={deal.link}
-      target="_blank"
-      rel="noopener noreferrer"
+    <Link
+      href={`/deal/${deal.id}`}
       className="group flex flex-col rounded-2xl border border-slate-200 bg-white overflow-hidden
                  shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
     >
@@ -38,9 +37,12 @@ export default function DealCard({ deal }: { deal: Deal }) {
         </h3>
         <div className="mt-auto flex items-center justify-between pt-2 text-xs text-slate-400">
           <span className="truncate max-w-[65%]">{deal.source || "출처 미상"}</span>
-          {date && <span className="shrink-0">{date}</span>}
+          <span className="shrink-0 flex items-center gap-2">
+            {deal.views > 0 && <span>조회 {deal.views.toLocaleString()}</span>}
+            {date && <span>{date}</span>}
+          </span>
         </div>
       </div>
-    </a>
+    </Link>
   );
 }

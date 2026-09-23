@@ -51,11 +51,11 @@ class EditDialog:
 
         for r in self.rows:
             link = str(r[3])
-            self.overrides.setdefault(link, {"title": str(r[1]), "image": ""})
+            self.overrides.setdefault(link, {"title": str(r[1]), "image": "", "content": ""})
 
-        self.dlg = T.make_dialog(parent, "발행 전 확인 · 편집", 980, 660)
+        self.dlg = T.make_dialog(parent, "발행 전 확인 · 편집", 980, 760)
         self.dlg.resizable(True, True)
-        self.dlg.minsize(760, 480)
+        self.dlg.minsize(760, 560)
         self._build()
         self._populate_list()
         if self.rows:
@@ -153,6 +153,22 @@ class EditDialog:
                          "(없어도 이미지 URL 입력/자동 채우기/발행은 정상 동작합니다)"
                     ).pack(anchor="w", pady=(6, 0))
 
+        tk.Label(right, text="본문 (상세 페이지에 표시됩니다)", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG
+                ).pack(anchor="w", pady=(14, 2))
+        text_wrap = tk.Frame(right, bg=T.BG)
+        text_wrap.pack(fill="both", expand=True)
+        self.content_text = tk.Text(text_wrap, height=7, font=T.font(10), bg=T.FIELD, fg=T.TEXT,
+                                    insertbackground=T.TEXT, relief="flat", wrap="word",
+                                    highlightthickness=1, highlightbackground=T.BORDER)
+        content_sb = ttk.Scrollbar(text_wrap, orient="vertical", command=self.content_text.yview)
+        self.content_text.configure(yscrollcommand=content_sb.set)
+        self.content_text.pack(side="left", fill="both", expand=True)
+        content_sb.pack(side="left", fill="y")
+        self.content_text.bind("<FocusOut>", lambda e: self._save_current(render_thumb=False))
+        tk.Label(right, fg=T.MUTED, bg=T.BG, font=T.font(8), justify="left",
+                text="비워두면 상세 페이지에 '등록된 본문이 없습니다'로 표시되고, 원문 링크로만 안내됩니다."
+                ).pack(anchor="w", pady=(2, 0))
+
         self.excl_var = tk.BooleanVar(value=False)
         ttk.Checkbutton(right, text="이 항목은 발행하지 않음", variable=self.excl_var,
                        command=self._toggle_excl).pack(anchor="w", pady=(10, 0))
@@ -197,6 +213,8 @@ class EditDialog:
         self.image_var.set(data["image"])
         self.excl_var.set(link in self.excluded)
         self.lbl_link.config(text=link)
+        self.content_text.delete("1.0", "end")
+        self.content_text.insert("1.0", data.get("content", ""))
         self._render_thumb(data["image"])
 
     def _save_current(self, render_thumb=True):
@@ -207,6 +225,7 @@ class EditDialog:
         new_img = self.image_var.get().strip()
         changed = new_img != data["image"]
         data["image"] = new_img
+        data["content"] = self.content_text.get("1.0", "end-1c").strip()
         self._update_tree_row(self._current_idx, data)
         if render_thumb and changed:
             self._render_thumb(new_img)

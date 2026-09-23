@@ -89,6 +89,9 @@ def to_items(rows, platform_key, query, overrides=None):
         image = str(ov.get("image") or "").strip()
         if image.startswith(("http://", "https://")):
             item["image"] = image[:600]
+        content = str(ov.get("content") or "").strip()
+        if content:
+            item["content"] = content[:20000]
         items.append(item)
     return items
 
