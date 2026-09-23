@@ -16,8 +16,8 @@ export type Deal = {
   platform: string; // 수집 대상 (naver_news / naver_blog / google)
   query: string; // 수집 키워드 → 홈페이지의 분류(태그)로 사용
   collectedAt: string | null; // ISO 8601
-  image: string | null; // 대표 이미지(썸네일) URL. 없으면 null
   publishedAt: string; // 홈페이지에 등록된 시각 (ISO 8601)
+  image: string | null; // 대표 이미지(썸네일) URL. 없으면 null
 };
 
 export type DealInput = Omit<Deal, "id" | "publishedAt">;
