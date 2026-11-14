@@ -1,12 +1,13 @@
 import DealList from "../components/DealList";
+import SiteFooter from "../components/SiteFooter";
 import VisitorCounter from "../components/VisitorCounter";
 import { listDeals, type Deal } from "../lib/deals";
+import { SITE_NAME } from "../lib/site";
 
 // 발행 API 가 새 항목을 저장하면 revalidatePath("/") 로 즉시 갱신됩니다.
 // 아래 값은 그 호출이 누락됐을 때를 대비한 안전장치(초)입니다.
 export const revalidate = 300;
 
-const SITE_NAME = "오늘의 쿠폰·행사";
 
 export default async function Home() {
   let deals: Deal[] = [];
@@ -49,9 +50,7 @@ export default async function Home() {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-400">
-        <p>© 2026 {SITE_NAME}. 각 항목의 저작권은 원문 게시처에 있습니다.</p>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

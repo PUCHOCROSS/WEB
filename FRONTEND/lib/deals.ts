@@ -166,9 +166,11 @@ const supabaseStore: DealStore = (() => {
 
   return {
     async list(limit) {
+      // 목록은 5분 캐시 (새 발행 시 API 의 revalidatePath 로 즉시 갱신됨).
+      // "no-store" 를 쓰면 홈(/)이 정적으로 만들어지지 못해 빌드 때 DYNAMIC_SERVER_USAGE 오류가 난다.
       const res = await fetch(`${base()}?select=*&order=published_at.desc&limit=${limit}`, {
         headers: headers(),
-        cache: "no-store",
+        next: { revalidate: 300 },
       });
       await check(res, "조회");
       return ((await res.json()) as Row[]).map(rowToDeal);

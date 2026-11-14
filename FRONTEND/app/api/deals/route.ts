@@ -56,7 +56,10 @@ export async function POST(req: Request) {
     console.error("[api/deals] insert failed:", e);
     return fail(502, "저장소에 기록하지 못했습니다. 서버 로그를 확인하세요.");
   }
-  if (inserted > 0) revalidatePath("/"); // 홈페이지에 바로 반영
+  if (inserted > 0) {
+    revalidatePath("/"); // 홈페이지에 바로 반영
+    revalidatePath("/sitemap.xml"); // 새 글을 사이트맵에도 바로 반영
+  }
 
   return NextResponse.json({
     ok: true,
@@ -97,5 +100,6 @@ export async function DELETE(req: Request) {
     return fail(502, "삭제하지 못했습니다.");
   }
   revalidatePath("/");
+  revalidatePath("/sitemap.xml");
   return NextResponse.json({ ok: true });
 }

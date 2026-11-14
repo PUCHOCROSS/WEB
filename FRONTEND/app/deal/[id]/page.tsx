@@ -1,11 +1,43 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { getDeal, bumpDealViews, isUuid } from "../../../lib/deals";
 import { getPlatformMeta } from "../../../components/platformMeta";
+import SiteFooter from "../../../components/SiteFooter";
 import Thumb from "../../../components/Thumb";
 
 // 조회수는 매 방문마다 올라가므로 캐시하지 않는다.
 export const dynamic = "force-dynamic";
+
+type Props = { params: Promise<{ id: string }> };
+
+// generateMetadata 와 페이지 본문이 같은 요청 안에서 DB 를 두 번 조회하지 않도록 묶는다.
+const loadDeal = cache(async (id: string) => (isUuid(id) ? getDeal(id) : null));
+
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params;
+  const deal = await loadDeal(id).catch(() => null);
+  if (!deal) return { title: "찾을 수 없는 페이지" };
+
+  const description =
+    (deal.content ?? "").replace(/\s+/g, " ").slice(0, 120) ||
+    `${deal.source || "원문"}에서 모아 온 쿠폰·행사 소식입니다.`;
+  const url = `/deal/${deal.id}`;
+
+  return {
+    title: deal.title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      type: "article",
+      title: deal.title,
+      description,
+      url,
+      images: deal.image ? [{ url: deal.image }] : undefined,
+    },
+  };
+}
 
 function formatDate(iso?: string | null) {
   if (!iso) return "";
@@ -14,11 +46,11 @@ function formatDate(iso?: string | null) {
   return d.toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
 }
 
-export default async function DealDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function DealDetailPage({ params }: Props) {
   const { id } = await params;
   if (!isUuid(id)) notFound();
 
-  const deal = await getDeal(id);
+  const deal = await loadDeal(id);
   if (!deal) notFound();
 
   // 통계용이라 실패해도 페이지 표시를 막지 않는다 (bumpDealViews 내부에서 이미 처리됨).
@@ -88,9 +120,7 @@ export default async function DealDetailPage({ params }: { params: Promise<{ id:
         </div>
       </main>
 
-      <footer className="border-t border-slate-200 bg-white py-6 text-center text-xs text-slate-400">
-        <p>© 2026 오늘의 쿠폰·행사. 각 항목의 저작권은 원문 게시처에 있습니다.</p>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }
