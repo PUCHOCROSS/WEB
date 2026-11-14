@@ -7,6 +7,7 @@
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { isDay } from "./period";
 
 export type Deal = {
   id: string;
@@ -20,6 +21,8 @@ export type Deal = {
   image: string | null; // 대표 이미지(썸네일) URL. 없으면 null
   content: string | null; // 상세 페이지에 보여줄 본문(직접 작성). 없으면 null
   views: number; // 상세 페이지 조회수
+  startsOn: string | null; // 행사 시작일 'YYYY-MM-DD' (모르면 null)
+  endsOn: string | null; // 행사 종료일 'YYYY-MM-DD' (모르면 null)
 };
 
 export type DealInput = Omit<Deal, "id" | "publishedAt" | "views">;
@@ -86,6 +89,10 @@ export function parseItems(body: unknown): ParsedItems | null {
     const t = typeof o.collectedAt === "string" ? Date.parse(o.collectedAt) : NaN;
     // 이미지는 선택 항목이라, 값이 없거나 형식이 잘못돼도 항목 자체를 버리지 않고 null 로 저장한다.
     const image = typeof o.image === "string" ? safeUrl(o.image) : null;
+    // 기간도 선택 항목. 형식이 틀리면 null, 시작 > 종료면 서로 바꾼다.
+    let startsOn = isDay(o.startsOn) ? o.startsOn : null;
+    let endsOn = isDay(o.endsOn) ? o.endsOn : null;
+    if (startsOn && endsOn && startsOn > endsOn) [startsOn, endsOn] = [endsOn, startsOn];
     items.push({
       title,
       link,
@@ -95,6 +102,8 @@ export function parseItems(body: unknown): ParsedItems | null {
       collectedAt: Number.isNaN(t) ? null : new Date(t).toISOString(),
       image,
       content: cleanContent(o.content),
+      startsOn,
+      endsOn,
     });
   }
   return { items, received: raw.length, rejected };
@@ -136,6 +145,8 @@ type Row = {
   published_at: string;
   content: string | null;
   views: number;
+  starts_on?: string | null; // deal_period.sql 을 실행하기 전에는 없는 칸
+  ends_on?: string | null;
 };
 
 const rowToDeal = (r: Row): Deal => ({
@@ -150,6 +161,8 @@ const rowToDeal = (r: Row): Deal => ({
   publishedAt: r.published_at,
   content: r.content ?? null,
   views: r.views ?? 0,
+  startsOn: r.starts_on ?? null,
+  endsOn: r.ends_on ?? null,
 });
 
 const supabaseStore: DealStore = (() => {
@@ -187,14 +200,27 @@ const supabaseStore: DealStore = (() => {
         collected_at: i.collectedAt,
         image: i.image,
         content: i.content,
+        starts_on: i.startsOn,
+        ends_on: i.endsOn,
       }));
       // ignore-duplicates + return=representation → 응답에는 '새로 저장된 행'만 담긴다
-      const res = await fetch(`${base()}?on_conflict=link`, {
-        method: "POST",
-        headers: headers({ Prefer: "resolution=ignore-duplicates,return=representation" }),
-        body: JSON.stringify(rows),
-        cache: "no-store",
-      });
+      const send = (body: object[]) =>
+        fetch(`${base()}?on_conflict=link`, {
+          method: "POST",
+          headers: headers({ Prefer: "resolution=ignore-duplicates,return=representation" }),
+          body: JSON.stringify(body),
+          cache: "no-store",
+        });
+      let res = await send(rows);
+      if (!res.ok) {
+        // 아직 deal_period.sql 을 실행하지 않아 기간 칸이 없으면, 기간 없이 다시 저장 (발행이 멈추지 않게)
+        const text = await res.clone().text();
+        if (/starts_on|ends_on/.test(text)) {
+          console.warn("[deals] 기간 칸이 없어 기간 없이 저장합니다. supabase/deal_period.sql 을 실행하세요.");
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          res = await send(rows.map(({ starts_on, ends_on, ...rest }) => rest));
+        }
+      }
       await check(res, "저장");
       return ((await res.json()) as unknown[]).length;
     },
@@ -275,7 +301,11 @@ const FILE_MAX = 2000;
 
 const readFile = async (): Promise<Deal[]> => {
   try {
-    return JSON.parse(await fs.readFile(FILE, "utf8")) as Deal[];
+    return (JSON.parse(await fs.readFile(FILE, "utf8")) as Deal[]).map((d) => ({
+      ...d,
+      startsOn: d.startsOn ?? null,
+      endsOn: d.endsOn ?? null,
+    }));
   } catch {
     return [];
   }

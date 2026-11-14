@@ -209,8 +209,9 @@ def make_draft(title, description, body):
 
 
 def fetch_draft(url, title="", timeout=8):
-    """{'title': str, 'image': str, 'content': str} 반환. 실패한 항목은 빈 문자열."""
-    out = {"title": "", "image": "", "content": ""}
+    """{'title', 'image', 'content', 'start', 'end'} 반환. 실패한 항목은 빈 문자열.
+    start / end 는 원문에서 읽은 행사 기간 ('YYYY-MM-DD')"""
+    out = {"title": "", "image": "", "content": "", "start": "", "end": ""}
     soup, final = _get_soup(url, timeout)
     if soup is None:
         return out
@@ -218,7 +219,106 @@ def fetch_draft(url, title="", timeout=8):
         og_title, image = _og_from_soup(soup, final)
         out["title"], out["image"] = og_title, image
         desc = _meta(soup, "og:description", "description", "twitter:description")
-        out["content"] = make_draft(title or og_title, desc, _body_text(soup))
+        body = _body_text(soup)
+        out["content"] = make_draft(title or og_title, desc, body)
+        out["start"], out["end"] = extract_period(f"{title}\n{desc}\n{body}")
     except Exception:
         pass
     return out
+
+
+# ══════════════════════════════════════════════════════════════════════════
+# 행사 기간 읽기 (홈페이지 lib/period.ts 와 같은 규칙. 한쪽을 고치면 다른 쪽도 맞춰 주세요)
+# ══════════════════════════════════════════════════════════════════════════
+import datetime as _dt
+
+_DATE_RE = re.compile(
+    r"(?<![\d.])(?:(20\d{2})\s*[.\-/년]\s*)?(\d{1,2})\s*(월|[.\-/])\s*(\d{1,2})(?![\d%])\s*(일)?"
+    r"(?:\s*\(\s*[월화수목금토일]\s*\))?"
+)
+_SEP_RE = re.compile(r"\s*(?:~|∼|〜|–|—|-|부터|에서)\s*")
+_DAY_ONLY_RE = re.compile(r"(\d{1,2})\s*일(?!\d)")
+_UNTIL_RE = re.compile(r"\s*(?:\([^)]{0,6}\))?\s*(?:\d{1,2}\s*[:시]\s*\d{0,2}\s*분?\s*)?까지")
+_FROM_RE = re.compile(r"\s*(?:\([^)]{0,6}\))?\s*(?:\d{1,2}\s*[:시]\s*\d{0,2}\s*분?\s*)?부터")
+_NOT_DATE_AFTER = re.compile(r"\s*(?:만|천|배|원|%|개|명|건|시간|분|kg|g|ml|L)")
+
+
+def _mkday(y, m, d):
+    try:
+        return _dt.date(y, m, d)
+    except ValueError:
+        return None
+
+
+def _with_year(y, m, d, ref):
+    if y:
+        return _mkday(y, m, d)
+    day = _mkday(ref.year, m, d)
+    if day is None:
+        return None
+    if (day - ref).days < -180:
+        return _mkday(ref.year + 1, m, d)
+    if (day - ref).days > 180:
+        return _mkday(ref.year - 1, m, d)
+    return day
+
+
+def _find_dates(text):
+    hits = []
+    for m in _DATE_RE.finditer(text):
+        y, mo, sep, d, il = m.groups()
+        if sep != "월" and not il and _NOT_DATE_AFTER.match(text, m.end()):
+            continue
+        hits.append((m.start(), m.end(), int(y) if y else None, int(mo), int(d)))
+    return hits
+
+
+def extract_period(text, ref=None):
+    """텍스트에서 행사 기간을 찾는다. ('YYYY-MM-DD' 또는 '', 'YYYY-MM-DD' 또는 '') 반환
+    ref: 연도를 정할 기준 날짜 (기본: 오늘)"""
+    ref = ref or _dt.date.today()
+    if not text:
+        return "", ""
+    hits = _find_dates(text)
+    iso = lambda d: d.isoformat() if d else ""
+
+    for i, (_s, end, y, m, d) in enumerate(hits):
+        sep = _SEP_RE.match(text, end)
+        if not sep:
+            continue
+        pos = sep.end()
+        start = _with_year(y, m, d, ref)
+        if not start:
+            continue
+        if i + 1 < len(hits) and hits[i + 1][0] == pos:
+            _bs, _be, by, bm, bd = hits[i + 1]
+            e = _mkday(by, bm, bd) if by else _mkday(start.year, bm, bd)
+            if e and not by and e < start:
+                e = _mkday(start.year + 1, bm, bd)
+            if e and e >= start:
+                return iso(start), iso(e)
+        only = _DAY_ONLY_RE.match(text, pos)
+        if only:
+            e = _mkday(start.year, m, int(only.group(1)))
+            if e and e >= start:
+                return iso(start), iso(e)
+
+    for _s, end, y, m, d in hits:
+        if _UNTIL_RE.match(text, end):
+            e = _with_year(y, m, d, ref)
+            if e:
+                return "", iso(e)
+    for _s, end, y, m, d in hits:
+        if _FROM_RE.match(text, end):
+            st = _with_year(y, m, d, ref)
+            if st:
+                return iso(st), ""
+    return "", ""
+
+
+def valid_day(text):
+    """'YYYY-MM-DD' 형식의 실제 날짜면 True"""
+    try:
+        return bool(re.fullmatch(r"\d{4}-\d{2}-\d{2}", text or "")) and bool(_dt.date.fromisoformat(text))
+    except ValueError:
+        return False

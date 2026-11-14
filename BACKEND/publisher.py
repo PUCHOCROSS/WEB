@@ -11,6 +11,7 @@
 """
 import json
 import queue
+import re
 import socket
 import threading
 import urllib.error
@@ -66,8 +67,8 @@ def _iso(text):
 def to_items(rows, platform_key, query, overrides=None):
     """결과 행 (번호, 제목, 출처, 링크, 수집일시) -> API 로 보낼 dict 목록 (링크 기준 중복 제거)
 
-    overrides: {link: {"title": str, "image": str}} - '발행 전 편집' 창에서 사용자가
-    고친 제목/대표 이미지(선택). 없으면 수집된 그대로 발행한다.
+    overrides: {link: {"title", "image", "content", "start", "end"}} - '발행 전 편집' 창에서
+    사용자가 고친 값(선택). 없으면 수집된 그대로 발행한다. start / end 는 행사 기간 'YYYY-MM-DD'.
     """
     overrides = overrides or {}
     items, seen = [], set()
@@ -92,6 +93,11 @@ def to_items(rows, platform_key, query, overrides=None):
         content = str(ov.get("content") or "").strip()
         if content:
             item["content"] = content[:20000]
+        # 행사 기간 (선택). 'YYYY-MM-DD' 형식만 보낸다.
+        for key, field in (("start", "startsOn"), ("end", "endsOn")):
+            day = str(ov.get(key) or "").strip()
+            if re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
+                item[field] = day
         items.append(item)
     return items
 

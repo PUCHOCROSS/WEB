@@ -20,7 +20,7 @@ from tkinter import ttk
 from tkinter import messagebox
 
 import theme as T
-from enrich import WRITE_MARK, fetch_draft
+from enrich import WRITE_MARK, extract_period, fetch_draft, valid_day
 from theme import FlatButton
 
 THUMB_W, THUMB_H = 220, 130
@@ -60,7 +60,7 @@ class EditDialog:
 
         for r in self.rows:
             link = str(r[3])
-            self.overrides.setdefault(link, {"title": str(r[1]), "image": "", "content": ""})
+            self.overrides.setdefault(link, {"title": str(r[1]), "image": "", "content": "", "start": "", "end": ""})
 
         self.dlg = T.make_dialog(parent, "발행 전 확인 · 편집", 980, 760)
         self.dlg.resizable(True, True)
@@ -111,8 +111,8 @@ class EditDialog:
                                  height=18, selectmode="browse")
         self.tree.heading("title", text="제목")
         self.tree.heading("img", text="이미지·글")
-        self.tree.column("title", width=254, anchor="w")
-        self.tree.column("img", width=70, anchor="center")
+        self.tree.column("title", width=240, anchor="w")
+        self.tree.column("img", width=84, anchor="center")
         sb = ttk.Scrollbar(left, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=sb.set)
         self.tree.pack(side="left", fill="y")
@@ -161,6 +161,29 @@ class EditDialog:
                     text="⚠ 썸네일 그림 미리보기에는 Pillow 가 필요합니다.  pip install Pillow\n"
                          "(없어도 이미지 URL 입력/자동 채우기/발행은 정상 동작합니다)"
                     ).pack(anchor="w", pady=(6, 0))
+
+        # ── 행사 기간 ──
+        tk.Label(right, text="행사 기간 (달력에 표시됩니다)", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG
+                 ).pack(anchor="w", pady=(12, 2))
+        period_row = tk.Frame(right, bg=T.BG)
+        period_row.pack(fill="x")
+        self.start_var = tk.StringVar()
+        self.end_var = tk.StringVar()
+        for i, (var, hint) in enumerate(((self.start_var, "시작일"), (self.end_var, "종료일"))):
+            if i:
+                tk.Label(period_row, text="~", font=T.font(10), fg=T.MUTED, bg=T.BG).pack(side="left", padx=6)
+            ent = tk.Entry(period_row, textvariable=var, width=12, font=T.font(10), bg=T.FIELD, fg=T.TEXT,
+                           insertbackground=T.TEXT, relief="flat", highlightthickness=1,
+                           highlightbackground=T.BORDER)
+            ent.pack(side="left", ipady=4)
+            ent.bind("<FocusOut>", lambda e: self._save_current(render_thumb=False))
+            ent.bind("<Return>", lambda e: self._save_current(render_thumb=False))
+        FlatButton(period_row, "📅 본문에서 읽기", kind="ghost", command=self._read_period
+                   ).pack(side="left", padx=(10, 0))
+        tk.Label(right, fg=T.MUTED, bg=T.BG, font=T.font(8), justify="left",
+                 text="예) 2026-11-14 ~ 2026-11-20 · 종료일만 알면 시작일은 비워 두세요. "
+                      "비워 두면 발행할 때 본문에서 자동으로 찾아봅니다."
+                 ).pack(anchor="w", pady=(2, 0))
 
         content_head = tk.Frame(right, bg=T.BG)
         content_head.pack(fill="x", pady=(14, 2))
@@ -227,6 +250,8 @@ class EditDialog:
         data = self.overrides[link]
         self.title_var.set(data["title"])
         self.image_var.set(data["image"])
+        self.start_var.set(data.get("start", ""))
+        self.end_var.set(data.get("end", ""))
         self.excl_var.set(link in self.excluded)
         self.lbl_link.config(text=link)
         self.content_text.delete("1.0", "end")
@@ -242,12 +267,15 @@ class EditDialog:
         changed = new_img != data["image"]
         data["image"] = new_img
         data["content"] = self.content_text.get("1.0", "end-1c").strip()
+        data["start"] = self.start_var.get().strip()
+        data["end"] = self.end_var.get().strip()
         self._update_tree_row(self._current_idx, data)
         if render_thumb and changed:
             self._render_thumb(new_img)
 
     def _update_tree_row(self, idx, data):
-        mark = ("🖼" if data["image"] else "—") + (" 📝" if data.get("content") else "")
+        mark = (("🖼" if data["image"] else "—") + (" 📝" if data.get("content") else "")
+                + (" 📅" if data.get("start") or data.get("end") else ""))
         self.tree.item(str(idx), values=(data["title"][:40] or "(제목 없음)", mark))
 
     def _clear_image(self):
@@ -350,10 +378,12 @@ class EditDialog:
     def _auto_fill_all(self):
         """이미지나 본문이 비어 있는 항목을 한꺼번에 채운다 (이미 채운 칸은 건드리지 않음)"""
         self._save_current(render_thumb=False)
+        def missing(o):
+            return not o["image"] or not o.get("content") or not (o.get("start") or o.get("end"))
         targets = [(str(r[3]), self.overrides[str(r[3])]["title"]) for r in self.rows
-                   if not self.overrides[str(r[3])]["image"] or not self.overrides[str(r[3])].get("content")]
+                   if missing(self.overrides[str(r[3])])]
         if not targets:
-            T.toast(self.dlg, "모든 항목에 이미지와 본문이 이미 있습니다.", "info")
+            T.toast(self.dlg, "모든 항목에 이미지, 본문, 기간이 이미 있습니다.", "info")
             return
         self.btn_auto.set("가져오는 중...", enabled=False)
         total = len(targets)
@@ -394,6 +424,8 @@ class EditDialog:
                 if got.get("content") and not data.get("content"):
                     data["content"] = got["content"]
                     drafted += 1
+                if not data.get("start") and not data.get("end") and (got.get("start") or got.get("end")):
+                    data["start"], data["end"] = got.get("start", ""), got.get("end", "")
                 self.lbl_progress.config(text=f"{done} / {total}")
         except queue.Empty:
             pass
@@ -415,6 +447,8 @@ class EditDialog:
         data = self.overrides[self._current_link]
         self.image_var.set(data["image"])
         self.title_var.set(data["title"])
+        self.start_var.set(data.get("start", ""))
+        self.end_var.set(data.get("end", ""))
         self.content_text.delete("1.0", "end")
         self.content_text.insert("1.0", data.get("content", ""))
         self._render_thumb(data["image"])
@@ -460,12 +494,31 @@ class EditDialog:
         data["content"] = draft
         if got.get("image") and not data["image"]:
             data["image"] = got["image"]
+        if not data.get("start") and not data.get("end"):
+            data["start"], data["end"] = got.get("start", ""), got.get("end", "")
         idx = next((i for i, r in enumerate(self.rows) if str(r[3]) == link), None)
         if idx is not None:
             self._update_tree_row(idx, data)
         if link == self._current_link:
             self._show_current_data()
         T.toast(self.dlg, "초안을 넣었습니다. '✍ (직접 작성' 칸을 채우고 문장을 다듬어 주세요.", "ok")
+
+    # ── 행사 기간 ───────────────────────────────────────────────────────
+    def _read_period(self):
+        """지금 항목의 제목 + 본문에서 기간을 찾아 칸에 채운다"""
+        if not self._current_link:
+            return
+        self._save_current(render_thumb=False)
+        data = self.overrides[self._current_link]
+        start, end = extract_period(f"{data['title']}\n{data.get('content', '')}")
+        if not (start or end):
+            T.toast(self.dlg, "제목과 본문에서 날짜를 찾지 못했습니다.\n"
+                              "직접 입력하거나, '✍ 본문 초안'으로 원문 내용을 먼저 가져와 보세요.", "warn")
+            return
+        self.start_var.set(start)
+        self.end_var.set(end)
+        self._save_current(render_thumb=False)
+        T.toast(self.dlg, f"기간을 채웠습니다: {start or '?'} ~ {end or '?'}", "ok")
 
     # ── 확인 ────────────────────────────────────────────────────────────
     def _confirm(self):
@@ -475,6 +528,24 @@ class EditDialog:
             T.toast(self.dlg, "발행할 항목이 없습니다. (모두 제외됨)", "warn")
             return
         overrides = {k: v for k, v in self.overrides.items() if k not in self.excluded}
+
+        # 기간: 비어 있으면 본문에서 자동으로 찾고, 형식이 틀린 값은 확인 후 비운다
+        bad = []
+        for v in overrides.values():
+            if not v.get("start") and not v.get("end"):
+                v["start"], v["end"] = extract_period(f"{v['title']}\n{v.get('content', '')}")
+            for key in ("start", "end"):
+                if v.get(key) and not valid_day(v[key]):
+                    bad.append((v, key))
+        if bad:
+            names = "\n".join(f"· {v['title'][:30]}: {v[k]}" for v, k in bad[:5])
+            if not messagebox.askyesno(
+                    "날짜 형식 확인",
+                    f"아래 날짜는 형식이 맞지 않아 빼고 발행합니다. (예: 2026-11-14)\n\n{names}\n\n계속할까요?",
+                    parent=self.dlg):
+                return
+            for v, k in bad:
+                v[k] = ""
 
         # 초안의 '직접 작성' 안내 문구가 그대로 남아 있으면 발행 전에 확인
         left = [v["title"][:30] for v in overrides.values() if WRITE_MARK in (v.get("content") or "")]

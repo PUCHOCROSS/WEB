@@ -28,6 +28,7 @@ function authenticate(req: Request): NextResponse | null {
 function refreshPages() {
   revalidatePath("/");
   revalidatePath("/category/[slug]", "page");
+  revalidatePath("/calendar");
   revalidatePath("/sitemap.xml");
 }
 

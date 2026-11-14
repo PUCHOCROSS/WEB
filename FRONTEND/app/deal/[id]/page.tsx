@@ -7,6 +7,8 @@ import CoupangBox from "../../../components/CoupangBox";
 import SiteFooter from "../../../components/SiteFooter";
 import SiteHeader from "../../../components/SiteHeader";
 import { categorize } from "../../../lib/categories";
+import { dealPeriod, formatDay, periodBadge, periodStatus } from "../../../lib/period";
+import PeriodBadge from "../../../components/PeriodBadge";
 import Thumb from "../../../components/Thumb";
 
 // 조회수는 매 방문마다 올라가므로 캐시하지 않는다.
@@ -59,6 +61,9 @@ export default async function DealDetailPage({ params }: Props) {
   const views = (await bumpDealViews(id)) || deal.views;
 
   const cat = categorize(deal);
+  const period = dealPeriod(deal);
+  const badge = periodBadge(period);
+  const status = periodStatus(period);
   const date = formatDate(deal.collectedAt ?? deal.publishedAt);
 
   return (
@@ -104,6 +109,38 @@ export default async function DealDetailPage({ params }: Props) {
               </div>
             </dl>
           </div>
+
+          {(period.start || period.end) && (
+            <div className="mx-5 mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-ground px-4 py-3.5 sm:mx-8">
+              <div>
+                <p className="text-[13px] text-muted">행사 기간</p>
+                <p className="text-[16px] font-semibold tabular-nums">
+                  {period.start && period.end ? (
+                    <>
+                      {formatDay(period.start)}
+                      <span className="mx-1.5 text-muted">~</span>
+                      {formatDay(period.end)}
+                    </>
+                  ) : period.end ? (
+                    `${formatDay(period.end)}까지`
+                  ) : (
+                    `${formatDay(period.start!)}부터`
+                  )}
+                </p>
+                {period.inferred && (
+                  <p className="mt-0.5 text-[12px] text-muted">본문에서 읽은 날짜예요. 정확한 기간은 원문에서 확인하세요.</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <PeriodBadge badge={badge} size="md" />
+                {status !== "ended" && (
+                  <Link href="/calendar" className="text-[13px] font-semibold text-ink underline underline-offset-2">
+                    달력에서 보기
+                  </Link>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="py-1" aria-hidden>
             <div className="perforation" />

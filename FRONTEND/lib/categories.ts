@@ -7,6 +7,7 @@
 //   - 점수가 가장 높은 카테고리로 분류 (같으면 목록에서 위에 있는 쪽)
 //   - 아무 단어도 없으면 '기타'
 import type { Deal } from "./deals";
+import { dealPeriod, periodBadge } from "./period";
 
 export type Category = {
   slug: string; // 주소에 쓰이는 이름 (/category/food)
@@ -159,18 +160,30 @@ export function categorize(d: { title: string; query?: string | null }): Categor
   return best;
 }
 
-/** 목록 화면용 가벼운 데이터: 본문(content)은 빼고 카테고리를 붙인다.
- *  본문까지 넘기면 글 200개의 본문이 통째로 브라우저에 내려가 페이지가 무거워진다. */
+/** 목록 화면용 가벼운 데이터: 본문(content)은 빼고 카테고리·기간을 붙인다.
+ *  본문까지 넘기면 글 200개의 본문이 통째로 브라우저에 내려가 페이지가 무거워진다.
+ *  기간 꼬리표(D-3 등)도 서버에서 미리 계산해 둔다 (자정 무렵 서버/브라우저 계산이 엇갈리지 않게). */
 export type DealSummary = Omit<Deal, "content"> & {
   category: string;
   fresh: boolean; // 등록된 지 24시간 이내 → 카드에 '신규' 스티커
+  periodInferred: boolean; // 기간을 본문에서 자동으로 읽었으면 true
+  badge: { text: string; tone: "urgent" | "normal" | "soon" | "ended" } | null;
 };
 
 export function toSummary(d: Deal): DealSummary {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { content, ...rest } = d;
   const age = Date.now() - Date.parse(d.publishedAt);
-  return { ...rest, category: categorize(d).slug, fresh: age >= 0 && age < 86_400_000 };
+  const p = dealPeriod(d);
+  return {
+    ...rest,
+    startsOn: p.start,
+    endsOn: p.end,
+    periodInferred: p.inferred,
+    badge: periodBadge(p),
+    category: categorize(d).slug,
+    fresh: age >= 0 && age < 86_400_000,
+  };
 }
 
 /** 카테고리별 글 수 */

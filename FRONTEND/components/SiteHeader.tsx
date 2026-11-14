@@ -9,7 +9,12 @@ export default function SiteHeader() {
         <Link href="/" className="font-display text-[22px] leading-none tracking-tight text-ink">
           {SITE_NAME}
         </Link>
-        <VisitorCounter />
+        <div className="flex items-center gap-3 sm:gap-5">
+          <Link href="/calendar" className="text-[14px] font-semibold text-ink hover:underline underline-offset-4">
+            행사 달력
+          </Link>
+          <VisitorCounter />
+        </div>
       </div>
     </header>
   );

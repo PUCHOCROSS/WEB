@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ETC, getCategory, type DealSummary } from "../lib/categories";
+import PeriodBadge, { periodText } from "./PeriodBadge";
 import Thumb from "./Thumb";
 
 function formatDate(iso?: string | null) {
@@ -13,11 +14,15 @@ function formatDate(iso?: string | null) {
 export default function DealCard({ deal }: { deal: DealSummary }) {
   const cat = getCategory(deal.category) ?? ETC;
   const date = formatDate(deal.collectedAt ?? deal.publishedAt);
+  const period = periodText(deal.startsOn, deal.endsOn);
+  const ended = deal.badge?.tone === "ended";
 
   return (
     <Link
       href={`/deal/${deal.id}`}
-      className="group flex flex-col rounded-[18px] bg-paper ring-1 ring-rule/70 transition-shadow hover:ring-2 hover:ring-ink"
+      className={`group flex flex-col rounded-[18px] bg-paper ring-1 ring-rule/70 transition-shadow hover:ring-2 hover:ring-ink ${
+        ended ? "opacity-60 hover:opacity-100" : ""
+      }`}
     >
       <div className="relative m-2 mb-0 aspect-[2/1] overflow-hidden rounded-[12px] bg-ground min-[440px]:aspect-[16/10]">
         <Thumb src={deal.image} alt="" accentColor={cat.color} label={cat.label} />
@@ -38,9 +43,14 @@ export default function DealCard({ deal }: { deal: DealSummary }) {
           {cat.label}
         </p>
         <h3 className="line-clamp-2 text-[15.5px] font-semibold leading-[1.45] text-ink">{deal.title}</h3>
+        {period && <p className="mt-1.5 text-[13px] font-medium tabular-nums text-ink/70">행사 {period}</p>}
         <p className="mt-auto flex items-center justify-between gap-2 pt-3 text-[12.5px] text-muted">
           <span className="truncate">{deal.source || "출처 미상"}</span>
-          {date && <span className="shrink-0 tabular-nums">{date}</span>}
+          {deal.badge ? (
+            <PeriodBadge badge={deal.badge} />
+          ) : (
+            date && <span className="shrink-0 tabular-nums">{date}</span>
+          )}
         </p>
       </div>
     </Link>
