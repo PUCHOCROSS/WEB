@@ -111,10 +111,13 @@ export function parseItems(body: unknown): ParsedItems | null {
 
 // ── 저장소 인터페이스 ─────────────────────────────────────────────────────
 type DealStore = {
-  list(limit: number): Promise<Deal[]>;
+  /** fresh=true 면 캐시를 거치지 않고 DB 에서 바로 읽는다 (관리 화면용) */
+  list(limit: number, fresh?: boolean): Promise<Deal[]>;
   /** 새로 저장된 건수를 반환. 이미 있는 링크는 건너뜀 */
   insert(items: DealInput[]): Promise<number>;
   remove(id: string): Promise<boolean>;
+  /** 행사 기간만 고친다. 없는 글이면 null */
+  updatePeriod(id: string, startsOn: string | null, endsOn: string | null): Promise<Deal | null>;
   /** 상세 페이지용 단건 조회. 없으면 null */
   getOne(id: string): Promise<Deal | null>;
   /** 조회수 +1. 반환값은 새 조회수 (실패해도 조용히 0 반환 - 통계용이라 페이지 표시를 막지 않는다) */
@@ -178,12 +181,13 @@ const supabaseStore: DealStore = (() => {
   };
 
   return {
-    async list(limit) {
+    async list(limit, fresh = false) {
       // 목록은 5분 캐시 (새 발행 시 API 의 revalidatePath 로 즉시 갱신됨).
       // "no-store" 를 쓰면 홈(/)이 정적으로 만들어지지 못해 빌드 때 DYNAMIC_SERVER_USAGE 오류가 난다.
+      // 단, 관리 화면(fresh)은 방금 지운 글이 다시 보이면 안 되므로 캐시 없이 읽는다.
       const res = await fetch(`${base()}?select=*&order=published_at.desc&limit=${limit}`, {
         headers: headers(),
-        next: { revalidate: 300 },
+        ...(fresh ? { cache: "no-store" as const } : { next: { revalidate: 300 } }),
       });
       await check(res, "조회");
       return ((await res.json()) as Row[]).map(rowToDeal);
@@ -233,6 +237,18 @@ const supabaseStore: DealStore = (() => {
       });
       await check(res, "삭제");
       return ((await res.json()) as unknown[]).length > 0;
+    },
+
+    async updatePeriod(id, startsOn, endsOn) {
+      const res = await fetch(`${base()}?id=eq.${id}`, {
+        method: "PATCH",
+        headers: headers({ Prefer: "return=representation" }),
+        body: JSON.stringify({ starts_on: startsOn, ends_on: endsOn }),
+        cache: "no-store",
+      });
+      await check(res, "기간 수정");
+      const rows = (await res.json()) as Row[];
+      return rows[0] ? rowToDeal(rows[0]) : null;
     },
 
     async getOne(id) {
@@ -357,6 +373,15 @@ const fileStore: DealStore = {
     await writeFile(rest);
     return true;
   },
+  async updatePeriod(id, startsOn, endsOn) {
+    const all = await readFile();
+    const deal = all.find((d) => d.id === id);
+    if (!deal) return null;
+    deal.startsOn = startsOn;
+    deal.endsOn = endsOn;
+    await writeFile(all);
+    return deal;
+  },
   async getOne(id) {
     const all = await readFile();
     return all.find((d) => d.id === id) ?? null;
@@ -387,9 +412,11 @@ function getStore(): DealStore {
   throw new Error("저장소가 설정되지 않았습니다. SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 를 확인하세요.");
 }
 
-export const listDeals = (limit = 200) => getStore().list(limit);
+export const listDeals = (limit = 200, fresh = false) => getStore().list(limit, fresh);
 export const insertDeals = (items: DealInput[]) => getStore().insert(items);
 export const removeDeal = (id: string) => getStore().remove(id);
+export const updateDealPeriod = (id: string, startsOn: string | null, endsOn: string | null) =>
+  getStore().updatePeriod(id, startsOn, endsOn);
 export const getDeal = (id: string) => getStore().getOne(id);
 export const bumpDealViews = (id: string) => getStore().bumpViews(id);
 export const getTotalVisits = () => getStore().getTotalVisits();

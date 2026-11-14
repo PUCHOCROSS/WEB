@@ -8,6 +8,7 @@ from page_crawling import PageCrawling
 from page_dashboard import PageDashboard
 from page_dev import PageDev
 from page_history import PageHistory
+from page_posts import PagePosts
 from page_publish import PagePublish
 from store import STORE
 
@@ -77,6 +78,7 @@ class MainApp(tk.Tk):
         "Crawling": "◎",
         "History": "◷",
         "Publish": "☁",
+        "Posts": "☰",
     }
 
     def __init__(self):
@@ -104,6 +106,7 @@ class MainApp(tk.Tk):
             "Crawling": PageCrawling,
             "History": PageHistory,
             "Publish": PagePublish,
+            "Posts": PagePosts,
         }
 
         self.pages = {}

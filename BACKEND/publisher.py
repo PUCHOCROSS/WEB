@@ -120,15 +120,19 @@ def _http_message(code, detail, location=""):
     if code == 401:
         return "인증에 실패했습니다. 토큰이 홈페이지의 PUBLISH_API_TOKEN 과 같은지 확인하세요."
     if code == 404:
+        if detail:
+            return detail          # 예: '해당 항목이 없습니다.' (이미 지워진 글)
         return f"{API_PATH} 를 찾을 수 없습니다. 주소와 홈페이지 배포 상태를 확인하세요."
+    if code == 405:
+        return "홈페이지가 이 기능을 아직 모릅니다. 홈페이지 코드를 최신으로 배포했는지 확인하세요."
     if code == 413:
         return "한 번에 보내는 데이터가 너무 큽니다."
     return f"서버 오류 ({code}): {detail}" if detail else f"서버 오류 ({code})"
 
 
-def _request(url, token, payload):
-    data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-    req = urllib.request.Request(url, data=data, method="POST", headers={
+def _request(url, token, payload, method="POST"):
+    data = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    req = urllib.request.Request(url, data=data, method=method, headers={
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json; charset=utf-8",
         "User-Agent": "WorkHub-Publisher/1.0",
@@ -180,6 +184,33 @@ def publish(base_url, token, items):
         for k in total:
             total[k] += int(res.get(k, 0) or 0)
     return total
+
+
+# ── 이미 발행한 글 관리 ──────────────────────────────────────────────────
+def list_published(base_url, token, limit=200):
+    """홈페이지에 올라간 글 목록 (최신순). 토큰을 붙여 캐시 없이 최신 상태로 받는다."""
+    url = f"{normalize_endpoint(base_url)}?limit={int(limit)}"
+    return _request(url, _check_token(token), None, method="GET").get("items", [])
+
+
+def delete_published(base_url, token, deal_ids):
+    """여러 글 삭제. (삭제된 수, [(id, 오류문구)]) 반환 — 하나가 실패해도 나머지는 계속"""
+    endpoint, token = normalize_endpoint(base_url), _check_token(token)
+    done, failed = 0, []
+    for did in deal_ids:
+        try:
+            _request(f"{endpoint}?id={urllib.parse.quote(did)}", token, None, method="DELETE")
+            done += 1
+        except PublishError as e:
+            failed.append((did, str(e)))
+    return done, failed
+
+
+def update_period(base_url, token, deal_id, start, end):
+    """행사 기간 수정. start / end 는 'YYYY-MM-DD' 또는 '' (비움). 고친 글을 돌려준다."""
+    url = f"{normalize_endpoint(base_url)}?id={urllib.parse.quote(deal_id)}"
+    res = _request(url, _check_token(token), {"startsOn": start or None, "endsOn": end or None}, method="PATCH")
+    return res.get("item", {})
 
 
 # ── UI 스레드용 도우미 ────────────────────────────────────────────────────

@@ -20,6 +20,7 @@ from tkinter import ttk
 from tkinter import messagebox
 
 import theme as T
+from date_picker import PeriodInput
 from enrich import WRITE_MARK, extract_period, fetch_draft, valid_day
 from theme import FlatButton
 
@@ -165,24 +166,15 @@ class EditDialog:
         # ── 행사 기간 ──
         tk.Label(right, text="행사 기간 (달력에 표시됩니다)", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG
                  ).pack(anchor="w", pady=(12, 2))
-        period_row = tk.Frame(right, bg=T.BG)
-        period_row.pack(fill="x")
         self.start_var = tk.StringVar()
         self.end_var = tk.StringVar()
-        for i, (var, hint) in enumerate(((self.start_var, "시작일"), (self.end_var, "종료일"))):
-            if i:
-                tk.Label(period_row, text="~", font=T.font(10), fg=T.MUTED, bg=T.BG).pack(side="left", padx=6)
-            ent = tk.Entry(period_row, textvariable=var, width=12, font=T.font(10), bg=T.FIELD, fg=T.TEXT,
-                           insertbackground=T.TEXT, relief="flat", highlightthickness=1,
-                           highlightbackground=T.BORDER)
-            ent.pack(side="left", ipady=4)
-            ent.bind("<FocusOut>", lambda e: self._save_current(render_thumb=False))
-            ent.bind("<Return>", lambda e: self._save_current(render_thumb=False))
-        FlatButton(period_row, "📅 본문에서 읽기", kind="ghost", command=self._read_period
-                   ).pack(side="left", padx=(10, 0))
+        period = PeriodInput(right, self.start_var, self.end_var,
+                             on_change=lambda: self._save_current(render_thumb=False))
+        period.pack(fill="x")
+        FlatButton(period.extra, "📝 본문에서 읽기", kind="ghost", command=self._read_period).pack(side="left")
         tk.Label(right, fg=T.MUTED, bg=T.BG, font=T.font(8), justify="left",
-                 text="예) 2026-11-14 ~ 2026-11-20 · 종료일만 알면 시작일은 비워 두세요. "
-                      "비워 두면 발행할 때 본문에서 자동으로 찾아봅니다."
+                 text="📅 를 눌러 달력에서 고르거나 2026-11-14 처럼 입력하세요. 종료일만 알면 시작일은 비워 두세요. "
+                      "둘 다 비워 두면 발행할 때 본문에서 자동으로 찾아봅니다.", wraplength=460
                  ).pack(anchor="w", pady=(2, 0))
 
         content_head = tk.Frame(right, bg=T.BG)
