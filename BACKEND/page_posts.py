@@ -1,4 +1,7 @@
-"""글 관리 (Posts): 홈페이지에 이미 발행한 글을 확인하고, 행사 기간을 고치거나 삭제합니다.
+"""글 관리 (Posts): 홈페이지에 이미 발행한 글을 확인하고, 수정하거나 삭제합니다.
+
+- ✏ 수정: 제목 / 대표 이미지 / 본문 / 행사 기간 (한 번에 한 글)
+- 📅 기간 수정: 여러 글을 골라 같은 기간을 한 번에 저장
 
 - 목록은 홈페이지 API 에서 캐시 없이 최신 상태로 받아옵니다. (Publish 메뉴의 주소/토큰 사용)
 - 삭제하면 홈 / 카테고리 / 달력에서 바로 사라집니다. 되돌릴 수 없으니 확인 창이 한 번 뜹니다.
@@ -12,6 +15,7 @@ from tkinter import messagebox, ttk
 import theme as T
 from date_picker import PeriodInput, parse_day
 from enrich import extract_period
+from post_edit_dialog import PostEditDialog
 from publish_service import is_configured
 from publisher import delete_published, list_published, run_async, site_url, update_period
 from store import STORE
@@ -78,7 +82,7 @@ class PagePosts(ttk.Frame):
     # ── UI ──────────────────────────────────────────────────────────────
     def create_widgets(self):
         header, right = T.page_header(
-            self, "Posts", "홈페이지에 올라간 글을 확인하고, 행사 기간을 고치거나 삭제합니다.")
+            self, "Posts", "홈페이지에 올라간 글을 확인하고, 내용을 고치거나 삭제합니다.")
         header.pack(fill="x")
         FlatButton(right, "홈페이지 열기", command=self._open_site, kind="ghost").pack(side="right")
         self.btn_reload = FlatButton(right, "↻ 새로고침", command=self.reload, kind="ghost")
@@ -102,7 +106,8 @@ class PagePosts(ttk.Frame):
 
         btns = ttk.Frame(sec, style="Card.TFrame")
         btns.pack(fill="x", side="bottom", pady=(10, 0))
-        FlatButton(btns, "📅 기간 수정", command=self.edit_period, kind="primary").pack(side="left")
+        FlatButton(btns, "✏ 수정", command=self.edit_post, kind="primary").pack(side="left")
+        FlatButton(btns, "📅 기간 수정", command=self.edit_period, kind="ghost").pack(side="left", padx=(8, 0))
         FlatButton(btns, "🌐 홈페이지에서 보기", command=self.open_on_site, kind="ghost").pack(side="left", padx=(8, 0))
         FlatButton(btns, "🔗 원문 열기", command=self.open_source, kind="ghost").pack(side="left", padx=(8, 0))
         FlatButton(btns, "🗑 삭제", command=self.delete_selected, kind="danger").pack(side="right")
@@ -127,7 +132,8 @@ class PagePosts(ttk.Frame):
         self.tree.configure(yscrollcommand=sb.set)
         sb.pack(side="right", fill="y")
         self.tree.pack(side="left", fill="both", expand=True)
-        self.tree.bind("<Double-1>", lambda e: self.edit_period())
+        self.tree.bind("<Double-1>", lambda e: self.edit_post())
+        self.tree.bind("<Return>", lambda e: self.edit_post())
         self.tree.bind("<Delete>", lambda e: self.delete_selected())
 
         self.lbl_empty = tk.Label(wrap, text="", font=T.font(10), fg=T.MUTED, bg=T.SURFACE, justify="center")
@@ -266,10 +272,25 @@ class PagePosts(ttk.Frame):
 
         run_async(self, lambda: delete_published(url, token, ids), done)
 
+    def edit_post(self):
+        sel = self._selected()
+        if not sel:
+            T.toast(self, "고칠 글을 선택하세요. (두 번 클릭해도 됩니다)", "warn")
+            return
+        if len(sel) > 1:
+            T.toast(self, "수정은 한 번에 한 글씩 할 수 있어요. 여러 글의 기간을 한꺼번에 바꾸려면 '📅 기간 수정'을 쓰세요.", "info")
+        PostEditDialog(self, sel[0], on_saved=self._apply_edited)
+
+    def _apply_edited(self, deal_id, item):
+        for it in self.items:
+            if it["id"] == deal_id:
+                it.update({k: item.get(k) for k in ("title", "image", "content", "startsOn", "endsOn")})
+        self._render()
+
     def edit_period(self):
         sel = self._selected()
         if not sel:
-            T.toast(self, "기간을 고칠 글을 선택하세요. (두 번 클릭해도 됩니다)", "warn")
+            T.toast(self, "기간을 고칠 글을 선택하세요. 여러 개를 골라 한 번에 바꿀 수 있어요.", "warn")
             return
         PeriodDialog(self, sel, on_saved=self._apply_saved)
 

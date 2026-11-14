@@ -50,6 +50,45 @@ function safeUrl(v: unknown): string | null {
   }
 }
 
+// ── 수정(PATCH) 입력 검증 ─────────────────────────────────────────────────
+/** 고칠 수 있는 칸. 보낸 칸만 바뀌고, 빠진 칸은 그대로 둔다. */
+export type DealPatch = Partial<Pick<Deal, "title" | "image" | "content" | "startsOn" | "endsOn">>;
+
+/** { title?, image?, content?, startsOn?, endsOn? } 검증. 문제가 있으면 { error } */
+export function parsePatch(body: unknown): { patch: DealPatch } | { error: string } {
+  if (typeof body !== "object" || body === null) return { error: "JSON 객체가 필요합니다." };
+  const o = body as Record<string, unknown>;
+  const has = (k: string) => Object.prototype.hasOwnProperty.call(o, k);
+  const patch: DealPatch = {};
+
+  if (has("title")) {
+    const title = clean(o.title, 300);
+    if (!title) return { error: "제목은 비울 수 없습니다." };
+    patch.title = title;
+  }
+  if (has("image")) {
+    if (o.image === null || o.image === "") patch.image = null;
+    else {
+      const image = safeUrl(o.image);
+      if (!image) return { error: "이미지 주소는 http:// 또는 https:// 로 시작해야 합니다." };
+      patch.image = image;
+    }
+  }
+  if (has("content")) patch.content = cleanContent(o.content);
+  for (const k of ["startsOn", "endsOn"] as const) {
+    if (!has(k)) continue;
+    const v = o[k];
+    if (v === null || v === "") patch[k] = null;
+    else if (isDay(v)) patch[k] = v;
+    else return { error: "날짜는 YYYY-MM-DD 형식이어야 합니다. 비우려면 빈 값을 보내세요." };
+  }
+  if (patch.startsOn && patch.endsOn && patch.startsOn > patch.endsOn) {
+    [patch.startsOn, patch.endsOn] = [patch.endsOn, patch.startsOn];
+  }
+  if (Object.keys(patch).length === 0) return { error: "고칠 내용이 없습니다." };
+  return { patch };
+}
+
 export type ParsedItems = {
   items: DealInput[]; // 검증을 통과한 항목 (링크 기준 중복 제거)
   received: number; // 받은 항목 수
@@ -116,8 +155,8 @@ type DealStore = {
   /** 새로 저장된 건수를 반환. 이미 있는 링크는 건너뜀 */
   insert(items: DealInput[]): Promise<number>;
   remove(id: string): Promise<boolean>;
-  /** 행사 기간만 고친다. 없는 글이면 null */
-  updatePeriod(id: string, startsOn: string | null, endsOn: string | null): Promise<Deal | null>;
+  /** 보낸 칸만 고친다. 없는 글이면 null */
+  update(id: string, patch: DealPatch): Promise<Deal | null>;
   /** 상세 페이지용 단건 조회. 없으면 null */
   getOne(id: string): Promise<Deal | null>;
   /** 조회수 +1. 반환값은 새 조회수 (실패해도 조용히 0 반환 - 통계용이라 페이지 표시를 막지 않는다) */
@@ -239,14 +278,20 @@ const supabaseStore: DealStore = (() => {
       return ((await res.json()) as unknown[]).length > 0;
     },
 
-    async updatePeriod(id, startsOn, endsOn) {
+    async update(id, patch) {
+      const cols: Record<string, unknown> = {};
+      if ("title" in patch) cols.title = patch.title;
+      if ("image" in patch) cols.image = patch.image;
+      if ("content" in patch) cols.content = patch.content;
+      if ("startsOn" in patch) cols.starts_on = patch.startsOn;
+      if ("endsOn" in patch) cols.ends_on = patch.endsOn;
       const res = await fetch(`${base()}?id=eq.${id}`, {
         method: "PATCH",
         headers: headers({ Prefer: "return=representation" }),
-        body: JSON.stringify({ starts_on: startsOn, ends_on: endsOn }),
+        body: JSON.stringify(cols),
         cache: "no-store",
       });
-      await check(res, "기간 수정");
+      await check(res, "수정");
       const rows = (await res.json()) as Row[];
       return rows[0] ? rowToDeal(rows[0]) : null;
     },
@@ -373,12 +418,11 @@ const fileStore: DealStore = {
     await writeFile(rest);
     return true;
   },
-  async updatePeriod(id, startsOn, endsOn) {
+  async update(id, patch) {
     const all = await readFile();
     const deal = all.find((d) => d.id === id);
     if (!deal) return null;
-    deal.startsOn = startsOn;
-    deal.endsOn = endsOn;
+    Object.assign(deal, patch);
     await writeFile(all);
     return deal;
   },
@@ -415,8 +459,7 @@ function getStore(): DealStore {
 export const listDeals = (limit = 200, fresh = false) => getStore().list(limit, fresh);
 export const insertDeals = (items: DealInput[]) => getStore().insert(items);
 export const removeDeal = (id: string) => getStore().remove(id);
-export const updateDealPeriod = (id: string, startsOn: string | null, endsOn: string | null) =>
-  getStore().updatePeriod(id, startsOn, endsOn);
+export const updateDeal = (id: string, patch: DealPatch) => getStore().update(id, patch);
 export const getDeal = (id: string) => getStore().getOne(id);
 export const bumpDealViews = (id: string) => getStore().bumpViews(id);
 export const getTotalVisits = () => getStore().getTotalVisits();

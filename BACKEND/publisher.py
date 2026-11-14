@@ -206,11 +206,18 @@ def delete_published(base_url, token, deal_ids):
     return done, failed
 
 
-def update_period(base_url, token, deal_id, start, end):
-    """행사 기간 수정. start / end 는 'YYYY-MM-DD' 또는 '' (비움). 고친 글을 돌려준다."""
+def update_published(base_url, token, deal_id, fields):
+    """이미 발행한 글 수정. fields 에 넣은 칸만 바뀐다.
+    fields: {"title", "image", "content", "startsOn", "endsOn"} 중 일부. 비우려면 "" 를 넣는다.
+    고친 글(dict)을 돌려준다."""
     url = f"{normalize_endpoint(base_url)}?id={urllib.parse.quote(deal_id)}"
-    res = _request(url, _check_token(token), {"startsOn": start or None, "endsOn": end or None}, method="PATCH")
+    res = _request(url, _check_token(token), fields, method="PATCH")
     return res.get("item", {})
+
+
+def update_period(base_url, token, deal_id, start, end):
+    """행사 기간만 수정. start / end 는 'YYYY-MM-DD' 또는 '' (비움)."""
+    return update_published(base_url, token, deal_id, {"startsOn": start or None, "endsOn": end or None})
 
 
 # ── UI 스레드용 도우미 ────────────────────────────────────────────────────

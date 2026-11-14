@@ -1,7 +1,8 @@
 // 쿠폰·행사 발행 API
 //   POST   /api/deals             Python 앱이 수집 결과를 발행 (토큰 필요)
 //   GET    /api/deals?limit=50    목록 조회. 토큰을 붙이면 캐시 없이 최신 목록 (Work Hub 글 관리용)
-//   PATCH  /api/deals?id=<uuid>   행사 기간 수정 (토큰 필요)  body: { startsOn, endsOn }  ("" 또는 null 은 비움)
+//   PATCH  /api/deals?id=<uuid>   글 수정 (토큰 필요)  body: { title?, image?, content?, startsOn?, endsOn? }
+//                                 보낸 칸만 바뀜. image / content / 날짜는 "" 또는 null 로 비움
 //   DELETE /api/deals?id=<uuid>   발행 취소 (토큰 필요)
 import { createHash, timingSafeEqual } from "node:crypto";
 import { revalidatePath } from "next/cache";
@@ -12,11 +13,11 @@ import {
   isUuid,
   listDeals,
   parseItems,
+  parsePatch,
   removeDeal,
   storageMode,
-  updateDealPeriod,
+  updateDeal,
 } from "../../../lib/deals";
-import { isDay } from "../../../lib/period";
 
 const MAX_BODY = 1_000_000; // 1MB
 
@@ -116,23 +117,19 @@ export async function PATCH(req: Request) {
   const id = new URL(req.url).searchParams.get("id") ?? "";
   if (!isUuid(id)) return fail(400, "id 가 올바르지 않습니다.");
 
-  let body: { startsOn?: unknown; endsOn?: unknown };
+  const text = await req.text();
+  if (text.length > MAX_BODY) return fail(413, "요청이 너무 큽니다.");
+  let body: unknown;
   try {
-    body = JSON.parse((await req.text()) || "{}");
+    body = JSON.parse(text || "{}");
   } catch {
     return fail(400, "JSON 형식이 올바르지 않습니다.");
   }
-  const pick = (v: unknown): string | null | undefined =>
-    v === null || v === "" ? null : isDay(v) ? v : undefined; // undefined = 형식 오류
-  let startsOn = pick(body.startsOn);
-  let endsOn = pick(body.endsOn);
-  if (startsOn === undefined || endsOn === undefined) {
-    return fail(400, "날짜는 YYYY-MM-DD 형식이어야 합니다. 비우려면 빈 값을 보내세요.");
-  }
-  if (startsOn && endsOn && startsOn > endsOn) [startsOn, endsOn] = [endsOn, startsOn];
+  const parsed = parsePatch(body);
+  if ("error" in parsed) return fail(400, parsed.error);
 
   try {
-    const deal = await updateDealPeriod(id, startsOn, endsOn);
+    const deal = await updateDeal(id, parsed.patch);
     if (!deal) return fail(404, "해당 항목이 없습니다.");
     refreshPages(id);
     return NextResponse.json({ ok: true, item: deal });
