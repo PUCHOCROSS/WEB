@@ -3,8 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
 import { getDeal, bumpDealViews, isUuid } from "../../../lib/deals";
-import { getPlatformMeta } from "../../../components/platformMeta";
+import CoupangBox from "../../../components/CoupangBox";
 import SiteFooter from "../../../components/SiteFooter";
+import { categorize } from "../../../lib/categories";
 import Thumb from "../../../components/Thumb";
 
 // 조회수는 매 방문마다 올라가므로 캐시하지 않는다.
@@ -56,7 +57,7 @@ export default async function DealDetailPage({ params }: Props) {
   // 통계용이라 실패해도 페이지 표시를 막지 않는다 (bumpDealViews 내부에서 이미 처리됨).
   const views = (await bumpDealViews(id)) || deal.views;
 
-  const meta = getPlatformMeta(deal.platform);
+  const cat = categorize(deal);
   const date = formatDate(deal.collectedAt ?? deal.publishedAt);
 
   return (
@@ -72,16 +73,17 @@ export default async function DealDetailPage({ params }: Props) {
       <main className="max-w-2xl mx-auto px-6 py-10 w-full flex-grow">
         <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
           <div className="relative aspect-[16/9] bg-slate-100">
-            <Thumb src={deal.image} alt={deal.title} accentColor={meta.color} />
+            <Thumb src={deal.image} alt={deal.title} accentColor={cat.color} />
           </div>
 
           <div className="px-6 py-6">
-            <span
-              className="inline-block text-[11px] font-semibold px-2.5 py-1 rounded-full mb-3"
-              style={{ color: meta.color, background: meta.bg }}
+            <Link
+              href={`/category/${cat.slug}`}
+              className="inline-block text-[11px] font-semibold px-2.5 py-1 rounded-full mb-3 hover:opacity-80"
+              style={{ color: cat.color, background: cat.bg }}
             >
-              {meta.label}
-            </span>
+              {cat.label}
+            </Link>
 
             <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 mb-2">
               {deal.title}
@@ -117,6 +119,14 @@ export default async function DealDetailPage({ params }: Props) {
               원문 보러 가기 ↗
             </a>
           </div>
+        </div>
+
+        <CoupangBox className="mt-6" />
+
+        <div className="mt-6 text-center">
+          <Link href={`/category/${cat.slug}`} className="text-sm text-slate-500 hover:text-slate-800 underline">
+            {cat.label} 소식 더 보기
+          </Link>
         </div>
       </main>
 

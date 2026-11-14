@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { ALL_CATEGORIES } from "../lib/categories";
 import { listDeals } from "../lib/deals";
 import { SITE_URL } from "../lib/site";
 
@@ -8,6 +9,11 @@ export const revalidate = 3600;
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const fixed: MetadataRoute.Sitemap = [
     { url: SITE_URL, lastModified: new Date(), changeFrequency: "daily", priority: 1 },
+    ...ALL_CATEGORIES.map((c) => ({
+      url: `${SITE_URL}/category/${c.slug}`,
+      changeFrequency: "daily" as const,
+      priority: 0.8,
+    })),
     { url: `${SITE_URL}/about`, changeFrequency: "yearly", priority: 0.3 },
     { url: `${SITE_URL}/privacy`, changeFrequency: "yearly", priority: 0.3 },
   ];

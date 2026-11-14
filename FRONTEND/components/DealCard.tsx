@@ -1,6 +1,5 @@
 import Link from "next/link";
-import type { Deal } from "../lib/deals";
-import { getPlatformMeta } from "./platformMeta";
+import { ETC, getCategory, type DealSummary } from "../lib/categories";
 import Thumb from "./Thumb";
 
 function formatDate(iso?: string | null) {
@@ -10,9 +9,9 @@ function formatDate(iso?: string | null) {
   return d.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
 }
 
-export default function DealCard({ deal }: { deal: Deal }) {
-  const meta = getPlatformMeta(deal.platform);
-  const date = formatDate(deal.collectedAt ?? undefined);
+export default function DealCard({ deal }: { deal: DealSummary }) {
+  const cat = getCategory(deal.category) ?? ETC;
+  const date = formatDate(deal.collectedAt ?? deal.publishedAt);
 
   return (
     <Link
@@ -21,12 +20,12 @@ export default function DealCard({ deal }: { deal: Deal }) {
                  shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
     >
       <div className="relative aspect-[16/10] bg-slate-100 overflow-hidden">
-        <Thumb src={deal.image} alt={deal.title} accentColor={meta.color} />
+        <Thumb src={deal.image} alt={deal.title} accentColor={cat.color} />
         <span
           className="absolute top-2.5 left-2.5 text-[11px] font-semibold px-2.5 py-1 rounded-full backdrop-blur"
-          style={{ color: meta.color, background: `${meta.bg}CC` }}
+          style={{ color: cat.color, background: `${cat.bg}CC` }}
         >
-          {meta.label}
+          {cat.label}
         </span>
       </div>
 

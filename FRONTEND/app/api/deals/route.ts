@@ -24,6 +24,13 @@ function authenticate(req: Request): NextResponse | null {
   return timingSafeEqual(a, b) ? null : fail(401, "인증에 실패했습니다.");
 }
 
+/** 목록이 바뀌었을 때 홈 / 카테고리 / 사이트맵을 바로 갱신 */
+function refreshPages() {
+  revalidatePath("/");
+  revalidatePath("/category/[slug]", "page");
+  revalidatePath("/sitemap.xml");
+}
+
 const storageError = () =>
   storageMode() === "none"
     ? fail(503, "저장소가 설정되지 않았습니다. SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY 를 확인하세요.")
@@ -56,10 +63,7 @@ export async function POST(req: Request) {
     console.error("[api/deals] insert failed:", e);
     return fail(502, "저장소에 기록하지 못했습니다. 서버 로그를 확인하세요.");
   }
-  if (inserted > 0) {
-    revalidatePath("/"); // 홈페이지에 바로 반영
-    revalidatePath("/sitemap.xml"); // 새 글을 사이트맵에도 바로 반영
-  }
+  if (inserted > 0) refreshPages();
 
   return NextResponse.json({
     ok: true,
@@ -99,7 +103,6 @@ export async function DELETE(req: Request) {
     console.error("[api/deals] delete failed:", e);
     return fail(502, "삭제하지 못했습니다.");
   }
-  revalidatePath("/");
-  revalidatePath("/sitemap.xml");
+  refreshPages();
   return NextResponse.json({ ok: true });
 }

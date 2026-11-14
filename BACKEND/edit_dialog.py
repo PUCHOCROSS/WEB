@@ -4,6 +4,8 @@ Crawling / History 결과 표에서 '🌐 홈페이지 발행' 버튼을 누르�
 발행하기 전에 각 항목의 제목과 대표 이미지(썸네일)를 확인하고 자유롭게 수정할 수 있습니다.
 
 - 이미지 URL 은 링크 주소(og:image)를 기준으로 자동 추출을 시도하고, 실패하면 직접 입력할 수 있습니다.
+- '✍ 본문 초안' 은 원문에서 혜택 / 기간 / 참여 조건 문장을 골라 틀에 맞춰 채워 줍니다.
+  원문 문장이 섞여 있으므로 발행 전에 내 말로 다듬어 주세요. ('직접 작성' 칸이 남아 있으면 발행 전에 알려 줍니다)
 - 여기서 고친 제목/이미지는 이 발행 건에만 적용되며, 수집 기록 자체는 바뀌지 않습니다.
 - 이미지 미리보기(썸네일 렌더링)에는 Pillow 가 필요합니다. 없으면 URL 입력/저장은 그대로 되고
   미리보기 그림만 표시되지 않습니다.
@@ -15,8 +17,10 @@ import urllib.request
 import webbrowser
 from tkinter import ttk
 
+from tkinter import messagebox
+
 import theme as T
-from enrich import fetch_og
+from enrich import WRITE_MARK, fetch_draft
 from theme import FlatButton
 
 THUMB_W, THUMB_H = 220, 130
@@ -36,6 +40,9 @@ def open_edit_dialog(parent, rows, on_confirm):
 
 class EditDialog:
 
+    AUTO_LABEL = "✨ 빈 칸 자동 채우기 (이미지·본문 초안)"
+    DRAFT_LABEL = "✍ 본문 초안"
+
     def __init__(self, parent, rows, on_confirm):
         self.rows = list(rows)
         self.on_confirm = on_confirm
@@ -48,6 +55,8 @@ class EditDialog:
         self._pil_ok = self._check_pil()
         self._thumb_q = queue.Queue()
         self._auto_q = queue.Queue()
+        self._draft_q = queue.Queue()
+        self._draft_busy = False
 
         for r in self.rows:
             link = str(r[3])
@@ -82,7 +91,7 @@ class EditDialog:
         # 화면 밖으로 밀려나지 않고 항상 보이도록 한다.
         bottom = tk.Frame(root, bg=T.BG)
         bottom.pack(side="bottom", fill="x", pady=(14, 0))
-        self.btn_auto = FlatButton(bottom, "✨ 이미지 없는 항목 자동 채우기", kind="ghost",
+        self.btn_auto = FlatButton(bottom, self.AUTO_LABEL, kind="ghost",
                                    command=self._auto_fill_all)
         self.btn_auto.pack(side="left")
         self.lbl_progress = tk.Label(bottom, text="", font=T.font(8), fg=T.MUTED, bg=T.BG)
@@ -101,9 +110,9 @@ class EditDialog:
         self.tree = ttk.Treeview(left, columns=("title", "img"), show="headings",
                                  height=18, selectmode="browse")
         self.tree.heading("title", text="제목")
-        self.tree.heading("img", text="이미지")
-        self.tree.column("title", width=270, anchor="w")
-        self.tree.column("img", width=54, anchor="center")
+        self.tree.heading("img", text="이미지·글")
+        self.tree.column("title", width=254, anchor="w")
+        self.tree.column("img", width=70, anchor="center")
         sb = ttk.Scrollbar(left, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=sb.set)
         self.tree.pack(side="left", fill="y")
@@ -153,8 +162,13 @@ class EditDialog:
                          "(없어도 이미지 URL 입력/자동 채우기/발행은 정상 동작합니다)"
                     ).pack(anchor="w", pady=(6, 0))
 
-        tk.Label(right, text="본문 (상세 페이지에 표시됩니다)", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG
-                ).pack(anchor="w", pady=(14, 2))
+        content_head = tk.Frame(right, bg=T.BG)
+        content_head.pack(fill="x", pady=(14, 2))
+        tk.Label(content_head, text="본문 (상세 페이지에 표시됩니다)", font=T.font(9, "bold"),
+                 fg=T.MUTED, bg=T.BG).pack(side="left")
+        self.btn_draft = FlatButton(content_head, self.DRAFT_LABEL, kind="ghost", command=self._make_draft)
+        self.btn_draft.config(padx=10, pady=2)
+        self.btn_draft.pack(side="right")
         text_wrap = tk.Frame(right, bg=T.BG)
         text_wrap.pack(fill="both", expand=True)
         self.content_text = tk.Text(text_wrap, height=7, font=T.font(10), bg=T.FIELD, fg=T.TEXT,
@@ -165,8 +179,9 @@ class EditDialog:
         self.content_text.pack(side="left", fill="both", expand=True)
         content_sb.pack(side="left", fill="y")
         self.content_text.bind("<FocusOut>", lambda e: self._save_current(render_thumb=False))
-        tk.Label(right, fg=T.MUTED, bg=T.BG, font=T.font(8), justify="left",
-                text="비워두면 상세 페이지에 '등록된 본문이 없습니다'로 표시되고, 원문 링크로만 안내됩니다."
+        tk.Label(right, fg=T.MUTED, bg=T.BG, font=T.font(8), justify="left", wraplength=460,
+                text="'✍ 본문 초안'으로 뼈대를 채운 뒤 내 말로 다듬어 주세요. 원문을 그대로 옮기면 "
+                     "저작권 문제가 생기고 애드센스 심사에도 불리합니다."
                 ).pack(anchor="w", pady=(2, 0))
 
         self.excl_var = tk.BooleanVar(value=False)
@@ -186,6 +201,7 @@ class EditDialog:
         for i, r in enumerate(self.rows):
             data = self.overrides[str(r[3])]
             self.tree.insert("", "end", iid=str(i), values=(data["title"][:40] or "(제목 없음)", "—"))
+            self._update_tree_row(i, data)
 
     def _on_tree_select(self, _e):
         sel = self.tree.selection()
@@ -231,7 +247,7 @@ class EditDialog:
             self._render_thumb(new_img)
 
     def _update_tree_row(self, idx, data):
-        mark = "🖼" if data["image"] else "—"
+        mark = ("🖼" if data["image"] else "—") + (" 📝" if data.get("content") else "")
         self.tree.item(str(idx), values=(data["title"][:40] or "(제목 없음)", mark))
 
     def _clear_image(self):
@@ -324,58 +340,132 @@ class EditDialog:
         self.thumb_canvas.create_image(x, y, anchor="nw", image=photo)
         self.thumb_canvas.image = photo  # 참조 유지 (가비지 컬렉션 방지)
 
-    # ── 자동 채우기 (og:image) ──────────────────────────────────────────
+    # ── 자동 채우기 (이미지 · 본문 초안) ─────────────────────────────────
+    def _alive(self):
+        try:
+            return bool(self.dlg.winfo_exists())
+        except tk.TclError:
+            return False
+
     def _auto_fill_all(self):
-        targets = [str(r[3]) for r in self.rows if not self.overrides[str(r[3])]["image"]]
+        """이미지나 본문이 비어 있는 항목을 한꺼번에 채운다 (이미 채운 칸은 건드리지 않음)"""
+        self._save_current(render_thumb=False)
+        targets = [(str(r[3]), self.overrides[str(r[3])]["title"]) for r in self.rows
+                   if not self.overrides[str(r[3])]["image"] or not self.overrides[str(r[3])].get("content")]
         if not targets:
-            T.toast(self.dlg, "이미 모든 항목에 이미지가 있습니다.", "info")
+            T.toast(self.dlg, "모든 항목에 이미지와 본문이 이미 있습니다.", "info")
             return
         self.btn_auto.set("가져오는 중...", enabled=False)
         total = len(targets)
         self.lbl_progress.config(text=f"0 / {total}")
 
         work_q = queue.Queue()
-        for link in targets:
-            work_q.put(link)
+        for t in targets:
+            work_q.put(t)
 
         def worker():
             while True:
                 try:
-                    link = work_q.get_nowait()
+                    link, title = work_q.get_nowait()
                 except queue.Empty:
                     return
-                self._auto_q.put((link, fetch_og(link)))
+                self._auto_q.put((link, fetch_draft(link, title)))
 
         for _ in range(min(AUTO_WORKERS, total)):
             threading.Thread(target=worker, daemon=True).start()
-        self._poll_auto(total, 0)
+        self._poll_auto(total, 0, 0)
 
-    def _poll_auto(self, total, done):
+    def _poll_auto(self, total, done, drafted):
+        if not self._alive():
+            return
         try:
             while True:
-                link, og = self._auto_q.get_nowait()
+                link, got = self._auto_q.get_nowait()
                 done += 1
                 data = self.overrides.get(link)
-                if data is not None and og.get("image") and not data["image"]:
-                    data["image"] = og["image"]
-                    if not data["title"] or data["title"] == "(제목 없음)":
-                        data["title"] = og.get("title") or data["title"]
+                if data is None:
+                    continue
+                if link == self._current_link:
+                    self._save_current(render_thumb=False)   # 입력 중이던 내용을 먼저 반영
+                if got.get("image") and not data["image"]:
+                    data["image"] = got["image"]
+                if got.get("title") and (not data["title"] or data["title"] == "(제목 없음)"):
+                    data["title"] = got["title"]
+                if got.get("content") and not data.get("content"):
+                    data["content"] = got["content"]
+                    drafted += 1
                 self.lbl_progress.config(text=f"{done} / {total}")
         except queue.Empty:
             pass
         if done < total:
-            self.dlg.after(150, lambda: self._poll_auto(total, done))
+            self.dlg.after(150, lambda: self._poll_auto(total, done, drafted))
             return
-        self.btn_auto.set("✨ 이미지 없는 항목 자동 채우기", enabled=True)
+        self.btn_auto.set(self.AUTO_LABEL, enabled=True)
         self.lbl_progress.config(text="")
         for i, r in enumerate(self.rows):
             self._update_tree_row(i, self.overrides[str(r[3])])
         if self._current_link:
-            data = self.overrides[self._current_link]
-            self.image_var.set(data["image"])
-            self.title_var.set(data["title"])
-            self._render_thumb(data["image"])
-        T.toast(self.dlg, "자동 채우기를 완료했습니다.", "ok")
+            self._show_current_data()
+        msg = "자동 채우기를 완료했습니다."
+        if drafted:
+            msg += f"\n본문 초안 {drafted}건을 넣었어요. 발행 전에 내 말로 다듬어 주세요."
+        T.toast(self.dlg, msg, "ok")
+
+    def _show_current_data(self):
+        data = self.overrides[self._current_link]
+        self.image_var.set(data["image"])
+        self.title_var.set(data["title"])
+        self.content_text.delete("1.0", "end")
+        self.content_text.insert("1.0", data.get("content", ""))
+        self._render_thumb(data["image"])
+
+    # ── 본문 초안 (현재 항목 1건) ───────────────────────────────────────
+    def _make_draft(self):
+        if self._draft_busy or not self._current_link:
+            return
+        self._save_current(render_thumb=False)
+        link = self._current_link
+        title = self.overrides[link]["title"]
+        self._draft_busy = True
+        self.btn_draft.set("만드는 중...", enabled=False)
+        threading.Thread(target=lambda: self._draft_q.put((link, fetch_draft(link, title))),
+                         daemon=True).start()
+        self.dlg.after(150, self._poll_draft)
+
+    def _poll_draft(self):
+        if not self._alive():
+            return
+        try:
+            link, got = self._draft_q.get_nowait()
+        except queue.Empty:
+            self.dlg.after(150, self._poll_draft)
+            return
+        self._draft_busy = False
+        self.btn_draft.set(self.DRAFT_LABEL, enabled=True)
+
+        draft = got.get("content", "")
+        if not draft:
+            T.toast(self.dlg, "원문에서 초안을 만들 내용을 찾지 못했습니다.\n"
+                              "'🔗 원문 열기'로 확인한 뒤 직접 작성해 주세요.", "warn")
+            return
+        data = self.overrides.get(link)
+        if data is None:
+            return
+        if link == self._current_link:
+            self._save_current(render_thumb=False)
+        if data.get("content") and not messagebox.askyesno(
+                "본문 초안", "이미 작성된 본문이 있습니다. 초안으로 바꿀까요?\n(지금 내용은 사라집니다)",
+                parent=self.dlg):
+            return
+        data["content"] = draft
+        if got.get("image") and not data["image"]:
+            data["image"] = got["image"]
+        idx = next((i for i, r in enumerate(self.rows) if str(r[3]) == link), None)
+        if idx is not None:
+            self._update_tree_row(idx, data)
+        if link == self._current_link:
+            self._show_current_data()
+        T.toast(self.dlg, "초안을 넣었습니다. '✍ (직접 작성' 칸을 채우고 문장을 다듬어 주세요.", "ok")
 
     # ── 확인 ────────────────────────────────────────────────────────────
     def _confirm(self):
@@ -385,5 +475,17 @@ class EditDialog:
             T.toast(self.dlg, "발행할 항목이 없습니다. (모두 제외됨)", "warn")
             return
         overrides = {k: v for k, v in self.overrides.items() if k not in self.excluded}
+
+        # 초안의 '직접 작성' 안내 문구가 그대로 남아 있으면 발행 전에 확인
+        left = [v["title"][:30] for v in overrides.values() if WRITE_MARK in (v.get("content") or "")]
+        if left:
+            names = "\n".join(f"· {t}" for t in left[:5]) + (f"\n외 {len(left) - 5}건" if len(left) > 5 else "")
+            if not messagebox.askyesno(
+                    "직접 작성 칸이 남아 있어요",
+                    f"아래 {len(left)}건은 본문에 '직접 작성' 안내 문구가 그대로 있습니다.\n\n{names}\n\n"
+                    "그대로 발행하면 안내 문구가 홈페이지에 보입니다. 그래도 발행할까요?",
+                    icon="warning", parent=self.dlg):
+                return
+
         self.dlg.destroy()
         self.on_confirm(publish_rows, overrides)
