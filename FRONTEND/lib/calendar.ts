@@ -1,5 +1,5 @@
 // 달력 계산 (서버 / 브라우저 공용, 순수 함수만)
-import type { DealSummary } from "./categories";
+import type { CatInfo, DealSummary } from "./categories";
 import { addDays, diffDays } from "./period";
 
 /** 달력에 그릴 행사 하나. 브라우저로 넘기므로 필요한 값만 담는다. */
@@ -7,6 +7,7 @@ export type CalEvent = {
   id: string;
   title: string;
   category: string;
+  cat: CatInfo;
   image: string | null;
   source: string;
   start: string; // 달력에 그릴 시작일
@@ -32,6 +33,7 @@ export function toCalEvent(d: DealSummary): CalEvent | null {
     id: d.id,
     title: d.title,
     category: d.category,
+    cat: d.cat,
     image: d.image,
     source: d.source,
     start,

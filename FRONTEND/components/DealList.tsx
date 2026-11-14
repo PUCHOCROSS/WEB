@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { getCategory, type DealSummary } from "../lib/categories";
+import type { DealSummary } from "../lib/categories";
 import DealCard from "./DealCard";
 
 export const SEARCH_EVENT = "dm-search";
@@ -43,7 +43,7 @@ export default function DealList({
     const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
     if (terms.length === 0) return deals;
     return deals.filter((d) => {
-      const hay = [d.title, d.source, d.query, getCategory(d.category)?.label ?? ""].join(" ").toLowerCase();
+      const hay = [d.title, d.source, d.query, d.cat.label].join(" ").toLowerCase();
       return terms.every((t) => hay.includes(t)); // 여러 단어는 모두 포함해야 함 (예: "치킨 할인")
     });
   }, [deals, q]);

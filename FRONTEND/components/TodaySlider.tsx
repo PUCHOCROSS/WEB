@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ETC, getCategory, type DealSummary } from "../lib/categories";
+import type { DealSummary } from "../lib/categories";
 import PeriodBadge, { CalendarGlyph, periodLong } from "./PeriodBadge";
 import Thumb from "./Thumb";
 
@@ -178,7 +178,7 @@ function ArrowButton({ label, onClick, children }: { label: string; onClick: () 
 
 /** 오늘의 행사 카드: 상태 / 제목 / 기간 | 이미지 */
 function TicketSlide({ deal, label }: { deal: DealSummary; label: string }) {
-  const cat = getCategory(deal.category) ?? ETC;
+  const cat = deal.cat;
   return (
     <div
       role="group"
@@ -205,7 +205,7 @@ function TicketSlide({ deal, label }: { deal: DealSummary; label: string }) {
           </p>
         </div>
         <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-2xl border border-rule bg-white">
-          <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.slug} iconClass="h-8 w-8" />
+          <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.icon} iconClass="h-8 w-8" />
         </div>
       </Link>
     </div>

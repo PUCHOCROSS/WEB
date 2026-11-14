@@ -20,6 +20,7 @@ from tkinter import ttk
 from tkinter import messagebox
 
 import theme as T
+from category_service import CategoryPicker, pick_and_upload
 from date_picker import PeriodInput
 from enrich import WRITE_MARK, extract_period, fetch_draft, valid_day
 from theme import FlatButton
@@ -61,7 +62,8 @@ class EditDialog:
 
         for r in self.rows:
             link = str(r[3])
-            self.overrides.setdefault(link, {"title": str(r[1]), "image": "", "content": "", "start": "", "end": ""})
+            self.overrides.setdefault(link, {"title": str(r[1]), "image": "", "content": "", "start": "", "end": "",
+                                             "category": ""})
 
         self.dlg = T.make_dialog(parent, "발행 전 확인 · 편집", 980, 760)
         self.dlg.resizable(True, True)
@@ -136,7 +138,16 @@ class EditDialog:
                              bg=T.FIELD, fg=T.TEXT, insertbackground=T.TEXT, relief="flat",
                              highlightthickness=1, highlightbackground=T.BORDER)
         ent_title.pack(fill="x", ipady=5)
-        ent_title.bind("<KeyRelease>", lambda e: self._save_current(render_thumb=False))
+        ent_title.bind("<KeyRelease>", lambda e: (self._save_current(render_thumb=False), self.cat_picker.refresh()))
+
+        cat_row = tk.Frame(right, bg=T.BG)
+        cat_row.pack(fill="x", pady=(10, 0))
+        tk.Label(cat_row, text="카테고리", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG).pack(side="left", padx=(0, 10))
+        self.cat_picker = CategoryPicker(cat_row, title_fn=lambda: self.title_var.get(),
+                                         on_change=lambda: self._save_current(render_thumb=False))
+        self.cat_picker.pack(side="left")
+        tk.Label(cat_row, text="'자동'은 홈페이지가 제목으로 분류합니다.", font=T.font(8), fg=T.MUTED, bg=T.BG
+                 ).pack(side="left", padx=(10, 0))
 
         tk.Label(right, text="대표 이미지 URL", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG
                 ).pack(anchor="w", pady=(12, 2))
@@ -153,6 +164,8 @@ class EditDialog:
                   ).pack(side="left", padx=(8, 0))
         FlatButton(img_row, "적용", kind="ghost", command=self._save_current).pack(side="left", padx=(4, 0))
         FlatButton(img_row, "지우기", kind="ghost", command=self._clear_image).pack(side="left", padx=(4, 0))
+        self.btn_upload = FlatButton(img_row, "🖼 내 이미지", kind="ghost", command=self._upload_image)
+        self.btn_upload.pack(side="left", padx=(4, 0))
         tk.Label(right, fg=T.MUTED, bg=T.BG, font=T.font(8), justify="left",
                 text="원문 페이지에서 이미지에 우클릭 → '이미지 주소 복사' 후 붙여넣기를 누르면 됩니다."
                 ).pack(anchor="w", pady=(2, 0))
@@ -244,6 +257,7 @@ class EditDialog:
         self.image_var.set(data["image"])
         self.start_var.set(data.get("start", ""))
         self.end_var.set(data.get("end", ""))
+        self.cat_picker.set_slug(data.get("category", ""))
         self.excl_var.set(link in self.excluded)
         self.lbl_link.config(text=link)
         self.content_text.delete("1.0", "end")
@@ -261,6 +275,7 @@ class EditDialog:
         data["content"] = self.content_text.get("1.0", "end-1c").strip()
         data["start"] = self.start_var.get().strip()
         data["end"] = self.end_var.get().strip()
+        data["category"] = self.cat_picker.get_slug()
         self._update_tree_row(self._current_idx, data)
         if render_thumb and changed:
             self._render_thumb(new_img)
@@ -434,6 +449,23 @@ class EditDialog:
         if drafted:
             msg += f"\n본문 초안 {drafted}건을 넣었어요. 발행 전에 내 말로 다듬어 주세요."
         T.toast(self.dlg, msg, "ok")
+
+    def _upload_image(self):
+        """내 컴퓨터의 이미지를 홈페이지 저장소에 올리고 대표 이미지로 넣는다"""
+        if not self._current_link:
+            return
+        link = self._current_link
+
+        def done(url):
+            self.overrides[link]["image"] = url
+            if link == self._current_link:
+                self.image_var.set(url)
+                self._save_current()
+            idx = next((i for i, r in enumerate(self.rows) if str(r[3]) == link), None)
+            if idx is not None:
+                self._update_tree_row(idx, self.overrides[link])
+
+        pick_and_upload(self.dlg, done, button=self.btn_upload)
 
     def _show_current_data(self):
         data = self.overrides[self._current_link]

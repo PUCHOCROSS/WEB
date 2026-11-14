@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ETC, getCategory, type DealSummary } from "../lib/categories";
+import type { DealSummary } from "../lib/categories";
 import PeriodBadge, { CalendarGlyph, periodLong } from "./PeriodBadge";
 import Thumb from "./Thumb";
 
@@ -12,7 +12,7 @@ function formatDate(iso?: string | null) {
 
 /** 목록 카드: 이미지 / 상태·카테고리 / 제목 / 기간 */
 export default function DealCard({ deal }: { deal: DealSummary }) {
-  const cat = getCategory(deal.category) ?? ETC;
+  const cat = deal.cat;
   const period = periodLong(deal.startsOn, deal.endsOn);
   const ended = deal.badge?.tone === "ended";
 
@@ -24,7 +24,7 @@ export default function DealCard({ deal }: { deal: DealSummary }) {
       }`}
     >
       <div className="relative aspect-[16/10] overflow-hidden rounded-[14px] bg-ground">
-        <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.slug} />
+        <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.icon} />
         {deal.fresh && (
           <span className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-0.5 text-[11.5px] font-bold text-brand-dark shadow-sm">
             NEW

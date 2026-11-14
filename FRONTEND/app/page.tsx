@@ -7,7 +7,8 @@ import RecommendCard from "../components/RecommendCard";
 import SiteFooter from "../components/SiteFooter";
 import SiteHeader from "../components/SiteHeader";
 import { toCalEvent, type CalEvent } from "../lib/calendar";
-import { countByCategory, toSummary, type DealSummary } from "../lib/categories";
+import { catInfo, countByCategory, toSummary, withEtc, type DealSummary } from "../lib/categories";
+import { getCategories } from "../lib/categoryStore";
 import { listDeals } from "../lib/deals";
 import { kstToday } from "../lib/period";
 import { SITE_NAME } from "../lib/site";
@@ -32,10 +33,11 @@ function pickRecommended(deals: DealSummary[]) {
 }
 
 export default async function Home() {
+  const cats = await getCategories();
   let deals: DealSummary[] = [];
   let failed = false;
   try {
-    deals = (await listDeals(200)).map(toSummary);
+    deals = (await listDeals(200)).map((d) => toSummary(d, cats));
   } catch (e) {
     console.error("[home] 목록을 불러오지 못했습니다:", e);
     failed = true;
@@ -63,7 +65,7 @@ export default async function Home() {
       <main className="mx-auto w-full max-w-6xl flex-grow px-4 sm:px-6">
         {/* ── 카테고리 ── */}
         <div className="card relative z-10 -mt-6 mb-8 px-4 py-3.5 sm:px-5">
-          <CategoryNav counts={countByCategory(deals)} total={deals.length} />
+          <CategoryNav categories={withEtc(cats).map(catInfo)} counts={countByCategory(deals)} total={deals.length} />
         </div>
 
         {failed ? (

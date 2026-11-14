@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
-import { ALL_CATEGORIES } from "../lib/categories";
+import { withEtc } from "../lib/categories";
+import { getCategories } from "../lib/categoryStore";
 import { listDeals } from "../lib/deals";
 import { SITE_URL } from "../lib/site";
 
@@ -9,7 +10,7 @@ export const revalidate = 3600;
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const fixed: MetadataRoute.Sitemap = [
     { url: SITE_URL, lastModified: new Date(), changeFrequency: "daily", priority: 1 },
-    ...ALL_CATEGORIES.map((c) => ({
+    ...withEtc(await getCategories()).map((c) => ({
       url: `${SITE_URL}/category/${c.slug}`,
       changeFrequency: "daily" as const,
       priority: 0.8,

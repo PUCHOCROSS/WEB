@@ -6,7 +6,9 @@ import { getDeal, bumpDealViews, isUuid } from "../../../lib/deals";
 import CoupangBox from "../../../components/CoupangBox";
 import SiteFooter from "../../../components/SiteFooter";
 import SiteHeader from "../../../components/SiteHeader";
-import { categorize } from "../../../lib/categories";
+import { catInfo, categorize } from "../../../lib/categories";
+import { getCategories } from "../../../lib/categoryStore";
+import { isExternalLink } from "../../../lib/deals";
 import { dealPeriod, periodBadge, periodStatus } from "../../../lib/period";
 import PeriodBadge, { periodLong } from "../../../components/PeriodBadge";
 import CategoryIcon from "../../../components/CategoryIcon";
@@ -61,7 +63,7 @@ export default async function DealDetailPage({ params }: Props) {
   // 통계용이라 실패해도 페이지 표시를 막지 않는다 (bumpDealViews 내부에서 이미 처리됨).
   const views = (await bumpDealViews(id)) || deal.views;
 
-  const cat = categorize(deal);
+  const cat = catInfo(categorize(deal, await getCategories()));
   const period = dealPeriod(deal);
   const badge = periodBadge(period);
   const status = periodStatus(period);
@@ -78,7 +80,7 @@ export default async function DealDetailPage({ params }: Props) {
 
         <article className="card overflow-hidden">
           <div className="relative m-3 mb-0 aspect-[16/9] overflow-hidden rounded-[16px] bg-ground">
-            <Thumb src={deal.image} alt={deal.title} accentColor={cat.color} slug={cat.slug} iconClass="h-16 w-16" />
+            <Thumb src={deal.image} alt={deal.title} accentColor={cat.color} slug={cat.icon} iconClass="h-16 w-16" />
           </div>
 
           <div className="px-5 pb-6 pt-5 sm:px-8 sm:pb-8 sm:pt-7">
@@ -89,7 +91,7 @@ export default async function DealDetailPage({ params }: Props) {
                 className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-semibold hover:brightness-95"
                 style={{ color: cat.color, background: cat.bg }}
               >
-                <CategoryIcon slug={cat.slug} className="h-4 w-4" />
+                <CategoryIcon slug={cat.icon} className="h-4 w-4" />
                 {cat.label}
               </Link>
             </div>
@@ -141,18 +143,22 @@ export default async function DealDetailPage({ params }: Props) {
               )}
             </div>
 
+            {isExternalLink(deal.link) && (
+              <>
             <a
-              href={deal.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-8 flex w-full items-center justify-center gap-2 rounded-full bg-brand py-4 text-[16px] font-bold text-white transition-colors hover:bg-brand-dark"
-            >
-              원문에서 자세히 보기
-              <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4">
-                <path d="M7 17 17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </a>
-            <p className="mt-3 text-center text-[12.5px] text-muted">행사 내용은 바뀔 수 있으니 참여 전에 원문에서 꼭 확인하세요.</p>
+                  href={deal.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-8 flex w-full items-center justify-center gap-2 rounded-full bg-brand py-4 text-[16px] font-bold text-white transition-colors hover:bg-brand-dark"
+                >
+                  원문에서 자세히 보기
+                  <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4">
+                    <path d="M7 17 17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </a>
+                <p className="mt-3 text-center text-[12.5px] text-muted">행사 내용은 바뀔 수 있으니 참여 전에 원문에서 꼭 확인하세요.</p>
+              </>
+            )}
           </div>
         </article>
 

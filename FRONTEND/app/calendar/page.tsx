@@ -6,7 +6,8 @@ import SiteFooter from "../../components/SiteFooter";
 import SiteHeader from "../../components/SiteHeader";
 import TodaySlider from "../../components/TodaySlider";
 import { toCalEvent, type CalEvent } from "../../lib/calendar";
-import { toSummary, type DealSummary } from "../../lib/categories";
+import { catInfo, toSummary, withEtc, type DealSummary } from "../../lib/categories";
+import { getCategories } from "../../lib/categoryStore";
 import { listDeals } from "../../lib/deals";
 import { addDays, diffDays, formatDay, isDay, kstToday, weekdayOf } from "../../lib/period";
 
@@ -40,10 +41,11 @@ export default async function CalendarPage({ searchParams }: Props) {
   // 처음 고른 날짜: 주소의 d → 이번 달이면 오늘 → 아니면 그 달 1일
   const initialDay = isDay(sp.d) && sp.d >= first && sp.d <= last ? sp.d : today >= first && today <= last ? today : first;
 
+  const cats = await getCategories();
   let deals: DealSummary[] = [];
   let failed = false;
   try {
-    deals = (await listDeals(200)).map(toSummary);
+    deals = (await listDeals(200)).map((d) => toSummary(d, cats));
   } catch (e) {
     console.error("[calendar] 목록을 불러오지 못했습니다:", e);
     failed = true;
@@ -77,6 +79,7 @@ export default async function CalendarPage({ searchParams }: Props) {
 
             <CalendarBoard
               key={ym}
+              categories={withEtc(cats).map(catInfo)}
               events={events}
               weeks={weeks}
               first={first}

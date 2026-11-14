@@ -1,7 +1,8 @@
-"""이미 발행한 글 수정 창 (Posts 메뉴 → ✏ 수정)
+"""글 쓰기 · 수정 창 (Posts 메뉴 → ✏ 새 글 쓰기 / ✏ 수정)
 
-제목 / 대표 이미지 / 본문 / 행사 기간을 고칠 수 있습니다.
-저장하면 바뀐 칸만 홈페이지로 보내고, 홈 · 카테고리 · 달력 · 상세 페이지에 바로 반영됩니다.
+- 새 글: 수집 없이 직접 써서 발행합니다. 원문 주소는 있으면 넣고, 없으면 비워 두세요.
+- 수정: 제목 / 카테고리 / 대표 이미지 / 본문 / 행사 기간을 고칩니다. 바뀐 칸만 홈페이지로 보냅니다.
+저장하면 홈 · 카테고리 · 달력 · 상세 페이지에 바로 반영됩니다.
 """
 import io
 import queue
@@ -12,9 +13,10 @@ import webbrowser
 from tkinter import messagebox, ttk
 
 import theme as T
+from category_service import CategoryPicker, pick_and_upload
 from date_picker import PeriodInput, parse_day
 from enrich import WRITE_MARK, extract_period, fetch_draft
-from publisher import run_async, site_url, update_published
+from publisher import publish_manual, run_async, site_url, update_published
 from store import STORE
 from theme import FlatButton
 
@@ -23,8 +25,9 @@ THUMB_W, THUMB_H = 240, 136
 
 class PostEditDialog:
 
-    def __init__(self, page, item, on_saved):
-        self.page, self.item, self.on_saved = page, item, on_saved
+    def __init__(self, page, item, on_saved, new=False):
+        """new=True 면 새 글 쓰기 (item 은 빈 dict). on_saved(글_id, 저장된_값)"""
+        self.page, self.item, self.on_saved, self.new = page, item, on_saved, new
         self._thumb_q = queue.Queue()
         self._thumb_token = 0
         self._draft_busy = False
@@ -33,8 +36,11 @@ class PostEditDialog:
         self.image_var = tk.StringVar(value=item.get("image") or "")
         self.start_var = tk.StringVar(value=item.get("startsOn") or "")
         self.end_var = tk.StringVar(value=item.get("endsOn") or "")
+        link = item.get("link") or ""
+        self.link_var = tk.StringVar(value=link if link.startswith("http") else "")
+        self.source_var = tk.StringVar(value=item.get("source") or "")
 
-        self.dlg = T.make_dialog(page, "발행한 글 수정", 860, 720)
+        self.dlg = T.make_dialog(page, "새 글 쓰기" if new else "발행한 글 수정", 880, 780 if new else 740)
         self.dlg.resizable(True, True)
         self.dlg.minsize(720, 600)
         self._build()
@@ -49,9 +55,11 @@ class PostEditDialog:
         foot = tk.Frame(root, bg=T.BG)
         foot.pack(side="bottom", fill="x", pady=(14, 0))
         FlatButton(foot, "🔗 원문 열기", kind="ghost", command=self._open_source).pack(side="left")
-        FlatButton(foot, "🌐 홈페이지에서 보기", kind="ghost", command=self._open_on_site).pack(side="left", padx=(8, 0))
+        if not self.new:
+            FlatButton(foot, "🌐 홈페이지에서 보기", kind="ghost", command=self._open_on_site).pack(side="left", padx=(8, 0))
         FlatButton(foot, "취소", kind="ghost", command=self.dlg.destroy).pack(side="right")
-        self.btn_save = FlatButton(foot, "저장", kind="primary", command=self._save)
+        self.save_label = "🌐 홈페이지에 발행" if self.new else "저장"
+        self.btn_save = FlatButton(foot, self.save_label, kind="primary", command=self._save)
         self.btn_save.pack(side="right", padx=(0, 8))
         self.lbl_msg = tk.Label(foot, text="", font=T.font(9), fg=T.MUTED, bg=T.BG)
         self.lbl_msg.pack(side="right", padx=12)
@@ -68,9 +76,19 @@ class PostEditDialog:
         side = tk.Frame(top, bg=T.BG)
         side.pack(side="left", fill="both", expand=True, padx=(16, 0))
 
-        self._label(side, "제목")
+        self._label(side, "제목" + (" (필수)" if self.new else ""))
         ent = self._entry(side, self.title_var, 11)
         ent.pack(fill="x", ipady=5)
+        ent.bind("<KeyRelease>", lambda e: self.cat_picker.refresh())
+        if self.new:
+            ent.focus_set()
+
+        cat_row = tk.Frame(side, bg=T.BG)
+        cat_row.pack(fill="x", pady=(10, 0))
+        tk.Label(cat_row, text="카테고리", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG).pack(side="left", padx=(0, 10))
+        self.cat_picker = CategoryPicker(cat_row, title_fn=lambda: self.title_var.get())
+        self.cat_picker.set_slug(self.item.get("category") or "")
+        self.cat_picker.pack(side="left")
 
         self._label(side, "대표 이미지 주소", pady=(12, 2))
         img_row = tk.Frame(side, bg=T.BG)
@@ -82,8 +100,25 @@ class PostEditDialog:
         FlatButton(img_row, "📋 붙여넣기", kind="ghost", command=self._paste_image).pack(side="left", padx=(8, 0))
         FlatButton(img_row, "지우기", kind="ghost",
                    command=lambda: (self.image_var.set(""), self._render_thumb())).pack(side="left", padx=(4, 0))
-        tk.Label(side, text="비우면 홈페이지에 카테고리 색 대체 이미지가 나옵니다.",
+        self.btn_upload = FlatButton(img_row, "🖼 내 이미지", kind="ghost", command=self._upload)
+        self.btn_upload.pack(side="left", padx=(4, 0))
+        tk.Label(side, text="'🖼 내 이미지'로 직접 만든 이미지를 올릴 수 있어요. 비우면 카테고리 아이콘이 나옵니다.",
                  font=T.font(8), fg=T.MUTED, bg=T.BG, anchor="w").pack(fill="x", pady=(3, 0))
+
+        if self.new:
+            src = tk.Frame(body, bg=T.BG)
+            src.pack(fill="x", pady=(14, 0))
+            left = tk.Frame(src, bg=T.BG)
+            left.pack(side="left", fill="x", expand=True)
+            self._label(left, "원문 주소 (선택)")
+            self._entry(left, self.link_var, 9).pack(fill="x", ipady=5)
+            right = tk.Frame(src, bg=T.BG)
+            right.pack(side="left", padx=(12, 0))
+            self._label(right, "출처 표시 (선택)")
+            self._entry(right, self.source_var, 9).pack(fill="x", ipady=5)
+            tk.Label(body, text="원문 주소가 없으면 상세 페이지에 '원문 보기' 버튼이 나오지 않습니다. "
+                                "출처를 비우면 사이트 이름이 표시됩니다.",
+                     font=T.font(8), fg=T.MUTED, bg=T.BG, anchor="w").pack(fill="x", pady=(3, 0))
 
         # 행사 기간
         self._label(body, "행사 기간", pady=(16, 2))
@@ -95,7 +130,8 @@ class PostEditDialog:
         head = tk.Frame(body, bg=T.BG)
         head.pack(fill="x", pady=(16, 2))
         tk.Label(head, text="본문 (상세 페이지에 표시됩니다)", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG).pack(side="left")
-        self.btn_draft = FlatButton(head, "✍ 원문에서 초안 다시 만들기", kind="ghost", command=self._make_draft)
+        self.btn_draft = FlatButton(head, "✍ 원문에서 초안 만들기" if self.new else "✍ 원문에서 초안 다시 만들기",
+                                    kind="ghost", command=self._make_draft)
         self.btn_draft.config(padx=10, pady=2)
         self.btn_draft.pack(side="right")
 
@@ -198,8 +234,9 @@ class PostEditDialog:
     def _make_draft(self):
         if self._draft_busy:
             return
-        link = self.item.get("link", "")
+        link = self.link_var.get().strip() if self.new else self.item.get("link", "")
         if not link.startswith("http"):
+            self.lbl_msg.config(text="원문 주소가 있어야 초안을 만들 수 있어요.", fg=T.AMBER)
             return
         if self._content() and not messagebox.askyesno(
                 "초안 다시 만들기", "지금 본문을 원문에서 새로 만든 초안으로 바꿀까요?\n(되돌리려면 본문 칸에서 Ctrl+Z)",
@@ -213,7 +250,7 @@ class PostEditDialog:
             self._draft_busy = False
             if not self.dlg.winfo_exists():
                 return
-            self.btn_draft.set("✍ 원문에서 초안 다시 만들기", enabled=True)
+            self.btn_draft.set("✍ 원문에서 초안 만들기" if self.new else "✍ 원문에서 초안 다시 만들기", enabled=True)
             if not ok or not got.get("content"):
                 self.lbl_msg.config(text="원문에서 초안을 만들 내용을 찾지 못했습니다.", fg=T.AMBER)
                 return
@@ -231,9 +268,16 @@ class PostEditDialog:
 
         run_async(self.page, lambda: fetch_draft(link, title), done)
 
+    def _upload(self):
+        def done(url):
+            self.image_var.set(url)
+            self._render_thumb()
+        pick_and_upload(self.dlg, done, button=self.btn_upload)
+
     def _open_source(self):
-        if str(self.item.get("link", "")).startswith("http"):
-            webbrowser.open(self.item["link"])
+        link = self.link_var.get().strip() if self.new else str(self.item.get("link", ""))
+        if link.startswith("http"):
+            webbrowser.open(link)
 
     def _open_on_site(self):
         base = site_url(STORE.get("publish.url", "")).rstrip("/")
@@ -249,6 +293,7 @@ class PostEditDialog:
             "content": self._content(),
             "startsOn": self.start_var.get().strip(),
             "endsOn": self.end_var.get().strip(),
+            "category": self.cat_picker.get_slug(),
         }
         old = {k: (self.item.get(k) or "") for k in new}
         old["title"] = " ".join(str(old["title"]).split())
@@ -256,6 +301,9 @@ class PostEditDialog:
         return {k: v for k, v in new.items() if v != old[k]}
 
     def _save(self):
+        if self.new:
+            self._publish_new()
+            return
         fields = self.changes()
         if not fields:
             self.dlg.destroy()
@@ -290,8 +338,58 @@ class PostEditDialog:
                 return
             self.dlg.destroy()
             self.on_saved(self.item["id"], payload)
-            names = {"title": "제목", "image": "이미지", "content": "본문", "startsOn": "기간", "endsOn": "기간"}
+            names = {"title": "제목", "image": "이미지", "content": "본문", "startsOn": "기간", "endsOn": "기간",
+                     "category": "카테고리"}
             changed = ", ".join(dict.fromkeys(names[k] for k in fields))
             T.toast(self.page, f"저장했습니다 ({changed}). 홈페이지에 바로 반영됩니다.", "ok")
 
         run_async(self.page, lambda: update_published(url, token, self.item["id"], fields), done)
+
+    def _publish_new(self):
+        """새 글 발행"""
+        title = " ".join(self.title_var.get().split())
+        link = self.link_var.get().strip()
+        image = self.image_var.get().strip()
+        start, end = self.start_var.get().strip(), self.end_var.get().strip()
+        if not title:
+            self.lbl_msg.config(text="제목을 입력해 주세요.", fg=T.RED)
+            return
+        if link and not link.startswith(("http://", "https://")):
+            self.lbl_msg.config(text="원문 주소는 http:// 또는 https:// 로 시작해야 합니다. (없으면 비워 두세요)", fg=T.RED)
+            return
+        if image and not image.startswith(("http://", "https://")):
+            self.lbl_msg.config(text="이미지 주소는 http:// 또는 https:// 로 시작해야 합니다.", fg=T.RED)
+            return
+        for v in (start, end):
+            if v and not parse_day(v):
+                self.lbl_msg.config(text=f"'{v}' 는 날짜 형식이 아닙니다. 예) 2026-11-14", fg=T.RED)
+                return
+        content = self._content()
+        if not content and not messagebox.askyesno(
+                "본문이 비어 있어요", "본문 없이 발행할까요?\n직접 쓴 설명이 있어야 검색과 애드센스 심사에 유리합니다.",
+                parent=self.dlg):
+            return
+        if WRITE_MARK in content and not messagebox.askyesno(
+                "직접 작성 칸이 남아 있어요",
+                "본문에 '직접 작성' 안내 문구가 그대로 있습니다.\n그대로 발행하면 홈페이지에 보입니다. 발행할까요?",
+                icon="warning", parent=self.dlg):
+            return
+
+        fields = {"title": title, "link": link, "source": self.source_var.get().strip(), "image": image,
+                  "content": content, "category": self.cat_picker.get_slug(), "startsOn": start, "endsOn": end}
+        url, token = STORE.get("publish.url", ""), STORE.get("publish.token", "")
+        self.btn_save.set("발행 중...", enabled=False)
+        self.lbl_msg.config(text="")
+
+        def done(ok, payload):
+            if not self.dlg.winfo_exists():
+                return
+            if not ok:
+                self.btn_save.set(self.save_label, enabled=True)
+                self.lbl_msg.config(text=str(payload), fg=T.RED)
+                return
+            self.dlg.destroy()
+            self.on_saved(payload, fields)
+            T.toast(self.page, "새 글을 발행했습니다. 홈페이지에 바로 올라갑니다.", "ok")
+
+        run_async(self.page, lambda: publish_manual(url, token, fields), done)

@@ -93,6 +93,10 @@ def to_items(rows, platform_key, query, overrides=None):
         content = str(ov.get("content") or "").strip()
         if content:
             item["content"] = content[:20000]
+        # 카테고리 (선택). 비어 있으면 홈페이지가 제목으로 자동 분류
+        cat = str(ov.get("category") or "").strip()
+        if cat:
+            item["category"] = cat
         # 행사 기간 (선택). 'YYYY-MM-DD' 형식만 보낸다.
         for key, field in (("start", "startsOn"), ("end", "endsOn")):
             day = str(ov.get(key) or "").strip()
@@ -179,10 +183,13 @@ def publish(base_url, token, items):
     """items 를 BATCH 단위로 보내고 합계를 반환: received / inserted / duplicates / rejected"""
     endpoint, token = normalize_endpoint(base_url), _check_token(token)
     total = {"received": 0, "inserted": 0, "duplicates": 0, "rejected": 0}
+    created = []
     for i in range(0, len(items), BATCH):
         res = _request(endpoint, token, {"items": items[i:i + BATCH]})
         for k in total:
             total[k] += int(res.get(k, 0) or 0)
+        created += res.get("created") or []
+    total["created"] = created
     return total
 
 
@@ -218,6 +225,131 @@ def update_published(base_url, token, deal_id, fields):
 def update_period(base_url, token, deal_id, start, end):
     """행사 기간만 수정. start / end 는 'YYYY-MM-DD' 또는 '' (비움)."""
     return update_published(base_url, token, deal_id, {"startsOn": start or None, "endsOn": end or None})
+
+
+# ── 직접 쓴 글 ────────────────────────────────────────────────────────────
+def publish_manual(base_url, token, fields):
+    """직접 쓴 글 1건 발행. 만든 글의 id 를 돌려준다.
+    fields: title(필수), link(선택: 원문 주소), source, image, content, category, startsOn, endsOn"""
+    item = {"manual": True, "platform": "manual", "query": ""}
+    item.update({k: v for k, v in fields.items() if v not in (None, "")})
+    res = publish(base_url, token, [item])
+    if res["rejected"]:
+        raise PublishError("제목이 비었거나 원문 주소 형식이 올바르지 않습니다.")
+    if not res["inserted"]:
+        raise PublishError("같은 원문 주소로 이미 발행한 글이 있습니다. Posts 목록에서 그 글을 수정하세요.")
+    return (res.get("created") or [{}])[0].get("id", "")
+
+
+# ── 이미지 올리기 ─────────────────────────────────────────────────────────
+MAX_UPLOAD = 4 * 1024 * 1024
+MAX_SIDE = 1600      # 긴 변 최대 픽셀 (홈페이지 카드·상세 화면에 충분한 크기)
+
+
+def prepare_image(path):
+    """(bytes, mime) — 큰 사진은 줄이고, 알맞은 형식으로 압축한다. Pillow 가 없으면 원본 그대로."""
+    with open(path, "rb") as f:
+        raw = f.read()
+    try:
+        from PIL import Image, ImageOps
+    except ImportError:
+        mime = _sniff(raw)
+        if not mime:
+            raise PublishError("JPG, PNG, WEBP, GIF 이미지만 올릴 수 있습니다.")
+        if len(raw) > MAX_UPLOAD:
+            raise PublishError("이미지가 4MB 보다 큽니다. 줄여서 올리거나 'pip install Pillow' 를 설치하세요.")
+        return raw, mime
+
+    import io
+    try:
+        img = Image.open(io.BytesIO(raw))
+        img.load()
+    except Exception:
+        raise PublishError("이미지 파일을 열 수 없습니다. JPG, PNG, WEBP, GIF 만 올릴 수 있습니다.") from None
+    if getattr(img, "is_animated", False) and len(raw) <= MAX_UPLOAD and img.format == "GIF":
+        return raw, "image/gif"                     # 움직이는 GIF 는 그대로
+    img = ImageOps.exif_transpose(img)              # 휴대폰 사진 회전 바로잡기
+    if max(img.size) > MAX_SIDE:
+        img.thumbnail((MAX_SIDE, MAX_SIDE))
+    has_alpha = img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info)
+    out = io.BytesIO()
+    if has_alpha:
+        img.save(out, "PNG", optimize=True)
+        mime = "image/png"
+        if out.tell() > MAX_UPLOAD:                 # 투명 PNG 가 너무 크면 WEBP 로
+            out = io.BytesIO()
+            img.save(out, "WEBP", quality=88)
+            mime = "image/webp"
+    else:
+        img = img.convert("RGB")
+        for q in (88, 80, 70, 60):
+            out = io.BytesIO()
+            img.save(out, "JPEG", quality=q, optimize=True, progressive=True)
+            if out.tell() <= MAX_UPLOAD:
+                break
+        mime = "image/jpeg"
+    data = out.getvalue()
+    if len(data) > MAX_UPLOAD:
+        raise PublishError("이미지를 4MB 아래로 줄이지 못했습니다. 더 작은 이미지를 골라 주세요.")
+    return data, mime
+
+
+def _sniff(b):
+    if b[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if b[:4] == b"\x89PNG":
+        return "image/png"
+    if b[:3] == b"GIF":
+        return "image/gif"
+    if b[:4] == b"RIFF" and b[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def upload_image(base_url, token, path):
+    """이미지 파일을 홈페이지 저장소에 올리고 공개 주소를 돌려준다."""
+    data, mime = prepare_image(path)
+    url = normalize_endpoint(base_url)[: -len(API_PATH)] + "/api/upload"
+    req = urllib.request.Request(url, data=data, method="POST", headers={
+        "Authorization": f"Bearer {_check_token(token)}",
+        "Content-Type": mime,
+        "User-Agent": "WorkHub-Publisher/1.0",
+    })
+    try:
+        with _OPENER.open(req, timeout=60) as resp:
+            res = json.loads(resp.read().decode("utf-8", "replace"))
+    except urllib.error.HTTPError as e:
+        detail = ""
+        try:
+            detail = str(json.loads(e.read().decode("utf-8", "replace")).get("error", ""))
+        except Exception:
+            pass
+        if e.code == 404 and not detail:
+            raise PublishError("홈페이지에 이미지 올리기 기능이 없습니다. 홈페이지 코드를 최신으로 배포하세요.") from None
+        raise PublishError(_http_message(e.code, detail)) from None
+    except (TimeoutError, socket.timeout):
+        raise PublishError("이미지 올리기 시간이 초과되었습니다.") from None
+    except urllib.error.URLError as e:
+        raise PublishError(f"서버에 연결할 수 없습니다: {e.reason}") from None
+    if not res.get("ok") or not res.get("url"):
+        raise PublishError(f"예상하지 못한 응답입니다: {str(res)[:120]}")
+    return res["url"]
+
+
+# ── 카테고리 ──────────────────────────────────────────────────────────────
+def _categories_url(base_url):
+    return normalize_endpoint(base_url)[: -len(API_PATH)] + "/api/categories"
+
+
+def fetch_categories(base_url, token):
+    """{'items': [...], 'icons': [...], 'isDefault': bool}"""
+    res = _request(_categories_url(base_url), _check_token(token), None, method="GET")
+    return {"items": res.get("items", []), "icons": res.get("icons", []), "isDefault": bool(res.get("isDefault"))}
+
+
+def save_categories(base_url, token, items):
+    res = _request(_categories_url(base_url), _check_token(token), {"items": items}, method="PUT")
+    return res.get("items", [])
 
 
 # ── UI 스레드용 도우미 ────────────────────────────────────────────────────

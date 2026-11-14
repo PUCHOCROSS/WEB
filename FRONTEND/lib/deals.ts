@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { isDay } from "./period";
+import { SITE_NAME } from "./site";
 
 export type Deal = {
   id: string;
@@ -23,7 +24,11 @@ export type Deal = {
   views: number; // 상세 페이지 조회수
   startsOn: string | null; // 행사 시작일 'YYYY-MM-DD' (모르면 null)
   endsOn: string | null; // 행사 종료일 'YYYY-MM-DD' (모르면 null)
+  category: string | null; // 직접 고른 카테고리 slug. null 이면 제목으로 자동 분류
 };
+
+/** 원문 링크 없이 직접 쓴 글은 link 가 'manual:<uuid>' (중복 판정용 고유값) */
+export const isExternalLink = (link: string) => /^https?:\/\//i.test(link);
 
 export type DealInput = Omit<Deal, "id" | "publishedAt" | "views">;
 
@@ -50,9 +55,17 @@ function safeUrl(v: unknown): string | null {
   }
 }
 
+/** 카테고리 slug: '' / null → null(자동), 형식이 틀리면 undefined */
+function cleanSlug(v: unknown): string | null | undefined {
+  if (v === null || v === undefined || v === "") return null;
+  if (typeof v !== "string") return undefined;
+  const s = v.trim().toLowerCase();
+  return /^[a-z0-9][a-z0-9-]{0,29}$/.test(s) ? s : undefined;
+}
+
 // ── 수정(PATCH) 입력 검증 ─────────────────────────────────────────────────
 /** 고칠 수 있는 칸. 보낸 칸만 바뀌고, 빠진 칸은 그대로 둔다. */
-export type DealPatch = Partial<Pick<Deal, "title" | "image" | "content" | "startsOn" | "endsOn">>;
+export type DealPatch = Partial<Pick<Deal, "title" | "image" | "content" | "startsOn" | "endsOn" | "category">>;
 
 /** { title?, image?, content?, startsOn?, endsOn? } 검증. 문제가 있으면 { error } */
 export function parsePatch(body: unknown): { patch: DealPatch } | { error: string } {
@@ -75,6 +88,11 @@ export function parsePatch(body: unknown): { patch: DealPatch } | { error: strin
     }
   }
   if (has("content")) patch.content = cleanContent(o.content);
+  if (has("category")) {
+    const c = cleanSlug(o.category);
+    if (c === undefined) return { error: "카테고리 값이 올바르지 않습니다." };
+    patch.category = c;
+  }
   for (const k of ["startsOn", "endsOn"] as const) {
     if (!has(k)) continue;
     const v = o[k];
@@ -117,7 +135,9 @@ export function parseItems(body: unknown): ParsedItems | null {
   for (const entry of raw) {
     const o = (typeof entry === "object" && entry !== null ? entry : {}) as Record<string, unknown>;
     const title = clean(o.title, 300);
-    const link = safeUrl(o.link);
+    // 직접 쓴 글(manual: true)은 원문 링크가 없어도 된다 → 고유값을 만들어 넣는다
+    const manual = o.manual === true;
+    const link = safeUrl(o.link) ?? (manual && !o.link ? `manual:${randomUUID()}` : null);
     if (!title || !link) {
       rejected++;
       continue;
@@ -135,7 +155,7 @@ export function parseItems(body: unknown): ParsedItems | null {
     items.push({
       title,
       link,
-      source: clean(o.source, 100) || new URL(link).hostname,
+      source: clean(o.source, 100) || (isExternalLink(link) ? new URL(link).hostname : SITE_NAME),
       platform: clean(o.platform, 50),
       query: clean(o.query, 100),
       collectedAt: Number.isNaN(t) ? null : new Date(t).toISOString(),
@@ -143,6 +163,7 @@ export function parseItems(body: unknown): ParsedItems | null {
       content: cleanContent(o.content),
       startsOn,
       endsOn,
+      category: cleanSlug(o.category) ?? null,
     });
   }
   return { items, received: raw.length, rejected };
@@ -152,8 +173,8 @@ export function parseItems(body: unknown): ParsedItems | null {
 type DealStore = {
   /** fresh=true 면 캐시를 거치지 않고 DB 에서 바로 읽는다 (관리 화면용) */
   list(limit: number, fresh?: boolean): Promise<Deal[]>;
-  /** 새로 저장된 건수를 반환. 이미 있는 링크는 건너뜀 */
-  insert(items: DealInput[]): Promise<number>;
+  /** 새로 저장된 글을 반환. 이미 있는 링크는 건너뜀 */
+  insert(items: DealInput[]): Promise<Deal[]>;
   remove(id: string): Promise<boolean>;
   /** 보낸 칸만 고친다. 없는 글이면 null */
   update(id: string, patch: DealPatch): Promise<Deal | null>;
@@ -189,6 +210,7 @@ type Row = {
   views: number;
   starts_on?: string | null; // deal_period.sql 을 실행하기 전에는 없는 칸
   ends_on?: string | null;
+  category?: string | null; // manual_posts.sql 을 실행하기 전에는 없는 칸
 };
 
 const rowToDeal = (r: Row): Deal => ({
@@ -205,6 +227,7 @@ const rowToDeal = (r: Row): Deal => ({
   views: r.views ?? 0,
   startsOn: r.starts_on ?? null,
   endsOn: r.ends_on ?? null,
+  category: r.category ?? null,
 });
 
 const supabaseStore: DealStore = (() => {
@@ -233,8 +256,8 @@ const supabaseStore: DealStore = (() => {
     },
 
     async insert(items) {
-      if (items.length === 0) return 0;
-      const rows = items.map((i) => ({
+      if (items.length === 0) return [];
+      const rows: Record<string, unknown>[] = items.map((i) => ({
         title: i.title,
         source: i.source,
         link: i.link,
@@ -245,6 +268,7 @@ const supabaseStore: DealStore = (() => {
         content: i.content,
         starts_on: i.startsOn,
         ends_on: i.endsOn,
+        category: i.category,
       }));
       // ignore-duplicates + return=representation → 응답에는 '새로 저장된 행'만 담긴다
       const send = (body: object[]) =>
@@ -255,17 +279,20 @@ const supabaseStore: DealStore = (() => {
           cache: "no-store",
         });
       let res = await send(rows);
-      if (!res.ok) {
-        // 아직 deal_period.sql 을 실행하지 않아 기간 칸이 없으면, 기간 없이 다시 저장 (발행이 멈추지 않게)
+      // 아직 SQL 을 실행하지 않아 없는 칸이 있으면, 그 칸을 빼고 다시 저장 (발행이 멈추지 않게)
+      for (const [cols, sql] of [
+        [["starts_on", "ends_on"], "deal_period.sql"],
+        [["category"], "manual_posts.sql"],
+      ] as const) {
+        if (res.ok) break;
         const text = await res.clone().text();
-        if (/starts_on|ends_on/.test(text)) {
-          console.warn("[deals] 기간 칸이 없어 기간 없이 저장합니다. supabase/deal_period.sql 을 실행하세요.");
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          res = await send(rows.map(({ starts_on, ends_on, ...rest }) => rest));
-        }
+        if (!cols.some((c) => text.includes(c))) continue;
+        console.warn(`[deals] DB 에 ${cols.join(", ")} 칸이 없어 빼고 저장합니다. supabase/${sql} 을 실행하세요.`);
+        for (const r of rows) for (const c of cols) delete r[c];
+        res = await send(rows);
       }
       await check(res, "저장");
-      return ((await res.json()) as unknown[]).length;
+      return ((await res.json()) as Row[]).map(rowToDeal);
     },
 
     async remove(id) {
@@ -285,6 +312,7 @@ const supabaseStore: DealStore = (() => {
       if ("content" in patch) cols.content = patch.content;
       if ("startsOn" in patch) cols.starts_on = patch.startsOn;
       if ("endsOn" in patch) cols.ends_on = patch.endsOn;
+      if ("category" in patch) cols.category = patch.category;
       const res = await fetch(`${base()}?id=eq.${id}`, {
         method: "PATCH",
         headers: headers({ Prefer: "return=representation" }),
@@ -366,6 +394,7 @@ const readFile = async (): Promise<Deal[]> => {
       ...d,
       startsOn: d.startsOn ?? null,
       endsOn: d.endsOn ?? null,
+      category: d.category ?? null,
     }));
   } catch {
     return [];
@@ -398,14 +427,15 @@ const fileStore: DealStore = {
     const all = await readFile();
     const known = new Set(all.map((d) => d.link));
     const now = new Date().toISOString();
-    let added = 0;
+    const added: Deal[] = [];
     for (const i of items) {
       if (known.has(i.link)) continue;
       known.add(i.link);
-      all.push({ ...i, id: randomUUID(), publishedAt: now, views: 0 });
-      added++;
+      const d = { ...i, id: randomUUID(), publishedAt: now, views: 0 };
+      all.push(d);
+      added.push(d);
     }
-    if (added > 0) {
+    if (added.length > 0) {
       all.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
       await writeFile(all.slice(0, FILE_MAX));
     }

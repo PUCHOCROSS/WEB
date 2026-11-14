@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ETC, getCategory, type DealSummary } from "../lib/categories";
+import type { DealSummary } from "../lib/categories";
 import PeriodBadge, { CalendarGlyph, periodLong } from "./PeriodBadge";
 import Thumb from "./Thumb";
 
@@ -7,12 +7,12 @@ import Thumb from "./Thumb";
  *  - column: [이미지 · 상태] / 제목 / 카테고리 / 기간 / 자세히 보기   (홈 '오늘의 추천 행사')
  *  - row:    상태 / 제목 / 기간 | [이미지]                              (목록용, 좁은 칸에서도 안 눌림) */
 export default function RecommendCard({ deal, layout = "column" }: { deal: DealSummary; layout?: "column" | "row" }) {
-  const cat = getCategory(deal.category) ?? ETC;
+  const cat = deal.cat;
   const period = periodLong(deal.startsOn, deal.endsOn);
   const bg = { background: `linear-gradient(135deg, ${cat.color}10, #ffffff 58%)` };
   const thumb = (size: string) => (
     <div className={`${size} shrink-0 overflow-hidden rounded-2xl border border-rule bg-white`}>
-      <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.slug} iconClass="h-8 w-8" />
+      <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.icon} iconClass="h-8 w-8" />
     </div>
   );
   const date = period && (

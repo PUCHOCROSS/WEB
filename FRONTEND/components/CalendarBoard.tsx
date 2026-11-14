@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useRef, useState } from "react";
 import { eventsOn, layoutWeek, type CalEvent } from "../lib/calendar";
-import { ALL_CATEGORIES, ETC, getCategory } from "../lib/categories";
+import type { CatInfo } from "../lib/categories";
 import { addDays, formatDay, weekdayOf } from "../lib/period";
 import CategoryIcon from "./CategoryIcon";
 import PeriodBadge, { CalendarGlyph, periodLong } from "./PeriodBadge";
@@ -21,6 +21,7 @@ type View = "month" | "week";
  *  - 주간: 고른 날짜가 있는 주를 날짜별 목록으로 (휴대폰에서 읽기 좋음)
  *  - 오늘: 오늘 날짜로 이동 */
 export default function CalendarBoard({
+  categories,
   events,
   weeks,
   first,
@@ -31,6 +32,7 @@ export default function CalendarBoard({
   prevHref,
   nextHref,
 }: {
+  categories: CatInfo[]; // 칩 표시 순서
   events: CalEvent[];
   weeks: string[];
   first: string;
@@ -46,16 +48,16 @@ export default function CalendarBoard({
   const [cat, setCat] = useState<string | null>(null);
   const listRef = useRef<HTMLElement>(null);
 
-  const cats = useMemo(() => ALL_CATEGORIES.filter((c) => events.some((e) => e.category === c.slug)), [events]);
+  const cats = useMemo(() => categories.filter((c) => events.some((e) => e.category === c.slug)), [categories, events]);
   const shown = useMemo(() => (cat ? events.filter((e) => e.category === cat) : events), [events, cat]);
   const layouts = useMemo(() => weeks.map((ws) => layoutWeek(shown, ws, MAX_LANES)), [shown, weeks]);
   const dots = useMemo(() => {
-    const m = new Map<string, string[]>();
+    const m = new Map<string, CatInfo[]>();
     const end = addDays(weeks[weeks.length - 1], 6);
     for (const e of shown) {
       for (let d = e.start < weeks[0] ? weeks[0] : e.start; d <= e.end && d <= end; d = addDays(d, 1)) {
         const list = m.get(d) ?? [];
-        list.push(e.category);
+        list.push(e.cat);
         m.set(d, list);
       }
     }
@@ -91,7 +93,7 @@ export default function CalendarBoard({
         <Chip on={!cat} onClick={() => setCat(null)} label="전체" />
         {cats.map((c) => (
           <Chip key={c.slug} on={cat === c.slug} onClick={() => setCat(cat === c.slug ? null : c.slug)} label={c.label} color={c.color}>
-            <CategoryIcon slug={c.slug} className="h-[18px] w-[18px]" />
+            <CategoryIcon slug={c.icon} className="h-[18px] w-[18px]" />
           </Chip>
         ))}
       </div>
@@ -176,8 +178,8 @@ export default function CalendarBoard({
                         {/* 휴대폰: 색 점 */}
                         {cs.length > 0 && !out && (
                           <span className="mt-1 flex items-center gap-[3px] sm:hidden" aria-hidden>
-                            {[...new Set(cs)].slice(0, 3).map((c) => (
-                              <span key={c} className="h-[6px] w-[6px] rounded-full" style={{ background: (getCategory(c) ?? ETC).color }} />
+                            {[...new Map(cs.map((c) => [c.slug, c])).values()].slice(0, 3).map((c) => (
+                              <span key={c.slug} className="h-[6px] w-[6px] rounded-full" style={{ background: c.color }} />
                             ))}
                             {cs.length > 3 && <span className="text-[9px] font-bold leading-none text-muted">+</span>}
                           </span>
@@ -192,7 +194,7 @@ export default function CalendarBoard({
                   {/* PC: 기간만큼 이어지는 알약 */}
                   <div className="pointer-events-none absolute inset-x-0 top-[44px] hidden grid-cols-7 gap-y-1 sm:grid">
                     {segments.map((s) => {
-                      const c = getCategory(s.ev.category) ?? ETC;
+                      const c = s.ev.cat;
                       const ended = s.ev.badge?.tone === "ended";
                       return (
                         <Link
@@ -240,7 +242,7 @@ export default function CalendarBoard({
                       <p className="pt-2 text-[13.5px] text-muted/80">행사 없음</p>
                     ) : (
                       items.map((e) => {
-                        const c = getCategory(e.category) ?? ETC;
+                        const c = e.cat;
                         return (
                           <Link
                             key={e.id}
@@ -292,7 +294,7 @@ export default function CalendarBoard({
 }
 
 function EventCard({ e, day, today }: { e: CalEvent; day: string; today: string }) {
-  const c = getCategory(e.category) ?? ETC;
+  const c = e.cat;
   const note = day === today ? "" : e.startsOn === day ? "이날 시작" : e.endsOn === day ? "이날 마감" : "";
   return (
     <Link
@@ -312,7 +314,7 @@ function EventCard({ e, day, today }: { e: CalEvent; day: string; today: string 
         </p>
       </div>
       <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-rule bg-white">
-        <Thumb src={e.image} alt="" accentColor={c.color} slug={c.slug} iconClass="h-7 w-7" />
+        <Thumb src={e.image} alt="" accentColor={c.color} slug={c.icon} iconClass="h-7 w-7" />
       </div>
     </Link>
   );

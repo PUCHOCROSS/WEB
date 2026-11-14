@@ -14,6 +14,7 @@ from tkinter import messagebox, ttk
 
 import theme as T
 from date_picker import PeriodInput, parse_day
+from category_service import auto_category, label_of, load_categories
 from enrich import extract_period
 from post_edit_dialog import PostEditDialog
 from publish_service import is_configured
@@ -84,7 +85,8 @@ class PagePosts(ttk.Frame):
         header, right = T.page_header(
             self, "Posts", "홈페이지에 올라간 글을 확인하고, 내용을 고치거나 삭제합니다.")
         header.pack(fill="x")
-        FlatButton(right, "홈페이지 열기", command=self._open_site, kind="ghost").pack(side="right")
+        FlatButton(right, "✏ 새 글 쓰기", command=self.new_post, kind="primary").pack(side="right")
+        FlatButton(right, "홈페이지 열기", command=self._open_site, kind="ghost").pack(side="right", padx=(0, 8))
         self.btn_reload = FlatButton(right, "↻ 새로고침", command=self.reload, kind="ghost")
         self.btn_reload.pack(side="right", padx=(0, 8))
 
@@ -115,11 +117,11 @@ class PagePosts(ttk.Frame):
 
         wrap = ttk.Frame(sec, style="Card.TFrame")
         wrap.pack(fill="both", expand=True)
-        cols = ("day", "title", "source", "period", "status", "views")
+        cols = ("day", "title", "cat", "period", "status", "views")
         self.tree = ttk.Treeview(wrap, columns=cols, show="headings", selectmode="extended")
         for cid, text, w, anc, stretch in (
                 ("day", "등록일", 96, "center", False), ("title", "제목", 360, "w", True),
-                ("source", "출처", 140, "w", False), ("period", "행사 기간", 120, "center", False),
+                ("cat", "카테고리", 130, "w", False), ("period", "행사 기간", 120, "center", False),
                 ("status", "상태", 90, "center", False), ("views", "조회", 60, "center", False)):
             self.tree.heading(cid, text=text, anchor="w" if anc == "w" else "center")
             self.tree.column(cid, width=w, anchor=anc, stretch=stretch, minwidth=50)
@@ -169,6 +171,7 @@ class PagePosts(ttk.Frame):
             self.items = payload
             self._loaded_at = time.time()
             self._render()
+            load_categories(self, lambda ok, _p: self.winfo_exists() and self._render())
 
         run_async(self, lambda: list_published(url, token), done)
 
@@ -200,7 +203,7 @@ class PagePosts(ttk.Frame):
             elif text == "오늘 마감" or (text.startswith("D-") and int(text[2:]) <= 3):
                 tags.append("urgent")
             self.tree.insert("", "end", iid=it["id"], tags=tags, values=(
-                _local_day(it.get("publishedAt", "")), it.get("title", ""), it.get("source", ""),
+                _local_day(it.get("publishedAt", "")), it.get("title", ""), self._cat_text(it),
                 period_label(it) or "—", text, f"{int(it.get('views') or 0):,}"))
         still = [i for i in keep if self.tree.exists(i)]
         if still:
@@ -216,6 +219,12 @@ class PagePosts(ttk.Frame):
             self._show_empty("조건에 맞는 글이 없습니다.")
         elif is_configured() and self._loaded_at:
             self._show_empty("아직 발행한 글이 없습니다.\nCrawling 이나 History 에서 '🌐 홈페이지 발행'으로 올려 보세요.")
+
+    @staticmethod
+    def _cat_text(it):
+        if it.get("category"):
+            return label_of(it["category"])
+        return f"자동 · {auto_category(it.get('title', ''), it.get('query', ''))['label']}"
 
     def _selected(self):
         return [self._by_id[i] for i in self.tree.selection() if i in self._by_id]
@@ -272,6 +281,12 @@ class PagePosts(ttk.Frame):
 
         run_async(self, lambda: delete_published(url, token, ids), done)
 
+    def new_post(self):
+        if not is_configured():
+            T.toast(self, "홈페이지 연결이 설정되지 않았습니다.\nPublish 메뉴에서 사이트 주소와 토큰을 먼저 저장하세요.", "warn")
+            return
+        PostEditDialog(self, {}, on_saved=lambda _id, _f: self.reload(), new=True)
+
     def edit_post(self):
         sel = self._selected()
         if not sel:
@@ -284,7 +299,7 @@ class PagePosts(ttk.Frame):
     def _apply_edited(self, deal_id, item):
         for it in self.items:
             if it["id"] == deal_id:
-                it.update({k: item.get(k) for k in ("title", "image", "content", "startsOn", "endsOn")})
+                it.update({k: item.get(k) for k in ("title", "image", "content", "startsOn", "endsOn", "category")})
         self._render()
 
     def edit_period(self):
