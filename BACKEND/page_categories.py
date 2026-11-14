@@ -2,7 +2,7 @@
 
 홈페이지 카테고리를 추가 / 수정 / 삭제하고 순서를 정합니다.
 - 이름 · 색 · 아이콘 · 자동 분류 단어를 바꿀 수 있습니다.
-- '💾 홈페이지에 저장'을 눌러야 홈페이지에 반영됩니다. (저장 전에는 이 PC 화면에서만 바뀜)
+- 추가 · 수정 · 삭제 · 순서 변경을 하면 바로 홈페이지에 자동 저장됩니다. (실패하면 화면에 표시되고 '💾 다시 저장'으로 재시도)
 - '기타'는 어디에도 안 맞는 글이 가는 곳이라 지울 수 없습니다.
 """
 import copy
@@ -46,6 +46,10 @@ class PageCategories(ttk.Frame):
         self.items = []           # 편집 중인 목록 ('기타' 제외)
         self.saved = []           # 마지막으로 홈페이지에 저장된 목록
         self.loaded = False
+        self._saving = False
+        self._again = False        # 저장 중에 또 바뀌면 끝난 뒤 한 번 더 저장
+        self._save_job = None
+        self._error = ""
         self.test_var = tk.StringVar()
         self.create_widgets()
 
@@ -58,7 +62,7 @@ class PageCategories(ttk.Frame):
         header, right = T.page_header(
             self, "Categories", "홈페이지 카테고리의 이름 · 색 · 아이콘 · 자동 분류 단어를 정하고 순서를 바꿉니다.")
         header.pack(fill="x")
-        self.btn_save = FlatButton(right, "💾 홈페이지에 저장", command=self.save, kind="primary")
+        self.btn_save = FlatButton(right, "💾 다시 저장", command=self.save, kind="ghost")
         self.btn_save.pack(side="right")
         self.btn_reload = FlatButton(right, "↻ 다시 불러오기", command=lambda: self.reload(ask=True), kind="ghost")
         self.btn_reload.pack(side="right", padx=(0, 8))
@@ -155,12 +159,25 @@ class PageCategories(ttk.Frame):
         if select and self.tree.exists(select):
             self.tree.selection_set(select)
             self.tree.see(select)
-        if self._dirty():
-            self.lbl_state.config(text="● 저장하지 않은 변경이 있습니다. '💾 홈페이지에 저장'을 눌러야 반영됩니다.",
-                                  foreground=T.AMBER)
-        else:
-            self.lbl_state.config(text="홈페이지와 같은 상태입니다.", foreground=T.MUTED)
+        self._show_state()
         self._run_test()
+
+    def _show_state(self):
+        if self._saving:
+            self.lbl_state.config(text="홈페이지에 저장하는 중...", foreground=T.MUTED)
+        elif self._error:
+            self.lbl_state.config(text=f"⚠ 저장 실패: {self._error}  ('💾 다시 저장'으로 재시도)", foreground=T.RED)
+        elif self._dirty():
+            self.lbl_state.config(text="● 곧 저장됩니다...", foreground=T.AMBER)
+        else:
+            self.lbl_state.config(text="✅ 홈페이지에 저장되어 있습니다.", foreground=T.GREEN)
+
+    def _changed(self, select=None):
+        """목록이 바뀔 때마다: 화면 갱신 + 잠시 뒤 자동 저장 (연달아 바꾸면 마지막에 한 번만)"""
+        self._render(select=select)
+        if self._save_job:
+            self.after_cancel(self._save_job)
+        self._save_job = self.after(700, self.save)
 
     def _run_test(self):
         t = self.test_var.get().strip()
@@ -196,7 +213,7 @@ class PageCategories(ttk.Frame):
 
     def _added(self, c):
         self.items.append(c)
-        self._render(select=c["slug"])
+        self._changed(select=c["slug"])
 
     def edit(self):
         i = self._selected_index()
@@ -210,7 +227,7 @@ class PageCategories(ttk.Frame):
 
     def _edited(self, i, c):
         self.items[i] = c
-        self._render(select=c["slug"])
+        self._changed(select=c["slug"])
 
     def move(self, d):
         i = self._selected_index()
@@ -219,7 +236,7 @@ class PageCategories(ttk.Frame):
         j = i + d
         if 0 <= j < len(self.items):
             self.items[i], self.items[j] = self.items[j], self.items[i]
-            self._render(select=self.items[j]["slug"])
+            self._changed(select=self.items[j]["slug"])
 
     def delete(self):
         i = self._selected_index()
@@ -234,32 +251,47 @@ class PageCategories(ttk.Frame):
                 "카테고리 삭제",
                 f"'{c['label']}' 카테고리를 목록에서 뺄까요?\n\n"
                 "이 카테고리를 직접 골라 둔 글은 제목으로 자동 분류됩니다.\n"
-                "'💾 홈페이지에 저장'을 눌러야 홈페이지에 반영됩니다.",
+                "홈페이지에 바로 반영됩니다.",
                 parent=self.winfo_toplevel()):
             return
         del self.items[i]
-        self._render()
+        self._changed()
 
     def save(self):
+        self._save_job = None
         if not self.loaded:
             return
-        if not self._dirty():
-            T.toast(self, "바뀐 내용이 없습니다.", "info")
+        if self._saving:
+            self._again = True
+            return
+        if not self._dirty() and not self._error:
+            self._show_state()
             return
         url, token = STORE.get("publish.url", ""), STORE.get("publish.token", "")
         items = copy.deepcopy(self.items)
+        self._saving = True
+        self._show_state()
         self.btn_save.set("저장 중...", enabled=False)
 
         def done(ok, payload):
-            self.btn_save.set("💾 홈페이지에 저장", enabled=True)
+            self._saving = False
+            self.btn_save.set("💾 다시 저장", enabled=True)
             if not ok:
-                T.toast(self, f"저장 실패\n{payload}", "err")
+                self._error = str(payload).replace("\n", " ")
+                self._show_state()
+                T.toast(self, f"카테고리 저장 실패\n{payload}", "err")
                 return
-            self.items = copy.deepcopy(payload)
+            self._error = ""
             self.saved = copy.deepcopy(payload)
-            set_cache(payload)
+            if items == self.items:          # 저장하는 사이 바뀐 게 없으면 서버 값으로 맞춘다
+                self.items = copy.deepcopy(payload)
+            set_cache(payload)                # 발행 · 수정 창의 카테고리 목록도 바로 갱신
             self._render()
-            T.toast(self, "카테고리를 저장했습니다. 홈페이지에 바로 반영됩니다.", "ok")
+            if self._again:
+                self._again = False
+                self.save()
+            else:
+                T.toast(self, "카테고리를 저장했습니다. 홈페이지에 바로 반영됩니다.", "ok")
 
         run_async(self, lambda: save_categories(url, token, items), done)
 

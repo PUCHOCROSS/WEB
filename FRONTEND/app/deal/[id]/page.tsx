@@ -79,7 +79,7 @@ export default async function DealDetailPage({ params }: Props) {
         </Link>
 
         <article className="card overflow-hidden">
-          <div className="relative m-3 mb-0 aspect-[16/9] overflow-hidden rounded-[16px] bg-ground">
+          <div className="relative m-3 mb-0 aspect-[4/3] overflow-hidden rounded-[16px] bg-ground sm:aspect-[16/10]">
             <Thumb src={deal.image} alt={deal.title} accentColor={cat.color} slug={cat.icon} iconClass="h-16 w-16" />
           </div>
 

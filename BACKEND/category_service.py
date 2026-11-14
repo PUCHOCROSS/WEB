@@ -115,7 +115,8 @@ class CategoryPicker(ttk.Combobox):
 
     def __init__(self, parent, title_fn=None, on_change=None, width=22):
         self.var = tk.StringVar()
-        super().__init__(parent, textvariable=self.var, state="readonly", width=width)
+        # postcommand: 목록을 펼칠 때마다 최신 카테고리로 다시 그린다 (다른 창에서 추가한 카테고리도 바로 보임)
+        super().__init__(parent, textvariable=self.var, state="readonly", width=width, postcommand=self._on_open)
         self.title_fn = title_fn or (lambda: "")
         self.on_change = on_change or (lambda: None)
         self._slugs = [AUTO]
@@ -125,6 +126,11 @@ class CategoryPicker(ttk.Combobox):
         if cached() is None:
             self.config(values=["불러오는 중..."])
             load_categories(self, lambda ok, _p: self.winfo_exists() and self.refresh())
+
+    def _on_open(self):
+        if cached() is None:        # 아직 못 받았거나 실패했으면 다시 받아 온다
+            load_categories(self, lambda ok, _p: self.winfo_exists() and self.refresh())
+        self.refresh()
 
     def _auto_text(self):
         if cached() is None:

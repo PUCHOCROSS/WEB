@@ -204,7 +204,7 @@ function TicketSlide({ deal, label }: { deal: DealSummary; label: string }) {
             {periodLong(deal.startsOn, deal.endsOn)}
           </p>
         </div>
-        <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-2xl border border-rule bg-white">
+        <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-rule bg-white">
           <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.icon} iconClass="h-8 w-8" />
         </div>
       </Link>

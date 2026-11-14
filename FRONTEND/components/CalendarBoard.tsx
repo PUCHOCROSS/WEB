@@ -313,7 +313,7 @@ function EventCard({ e, day, today }: { e: CalEvent; day: string; today: string 
           {periodLong(e.startsOn, e.endsOn)}
         </p>
       </div>
-      <div className="h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-rule bg-white">
+      <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-rule bg-white">
         <Thumb src={e.image} alt="" accentColor={c.color} slug={c.icon} iconClass="h-7 w-7" />
       </div>
     </Link>
