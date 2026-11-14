@@ -39,7 +39,7 @@ export default function AboutPage() {
       <Section title="문의">
         <p>
           제휴, 정정 요청, 게시 중단 요청 등은{" "}
-          <a href={`mailto:${CONTACT_EMAIL}`} className="text-blue-600 underline">
+          <a href={`mailto:${CONTACT_EMAIL}`} className="font-semibold text-ink underline underline-offset-2">
             {CONTACT_EMAIL}
           </a>
           로 보내 주세요.

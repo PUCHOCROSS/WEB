@@ -22,10 +22,10 @@ export default function CoupangBox({ className = "" }: { className?: string }) {
   if (!src) return null;
 
   return (
-    <aside className={`rounded-2xl border border-slate-200 bg-white px-5 py-4 ${className}`}>
+    <aside className={`rounded-[22px] bg-paper px-5 py-4 ring-1 ring-rule/70 ${className}`}>
       <div className="flex items-baseline justify-between mb-2">
-        <p className="text-sm font-semibold text-slate-700">함께 보면 좋은 할인 상품</p>
-        <span className="text-[11px] text-slate-400">광고</span>
+        <p className="text-[15px] font-semibold text-ink">함께 보면 좋은 할인 상품</p>
+        <span className="text-[12px] text-muted">광고</span>
       </div>
       <iframe
         src={src}
@@ -36,7 +36,7 @@ export default function CoupangBox({ className = "" }: { className?: string }) {
         referrerPolicy="unsafe-url"
         className="w-full border-0 overflow-hidden"
       />
-      <p className="mt-2 text-xs text-slate-500">{COUPANG_DISCLOSURE}</p>
+      <p className="mt-2 text-[12.5px] text-muted">{COUPANG_DISCLOSURE}</p>
     </aside>
   );
 }

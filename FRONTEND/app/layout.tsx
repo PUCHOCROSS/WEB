@@ -1,13 +1,19 @@
-import type { Metadata } from "next";
-import { Noto_Sans_KR } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Black_Han_Sans, IBM_Plex_Sans_KR } from "next/font/google";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "../lib/site";
 import "./globals.css";
 
-// Geist 는 한글 글리프가 없어 브라우저 기본 폰트로 대체되므로, 한글 본문용으로 Noto Sans KR 을 사용합니다.
-const notoKr = Noto_Sans_KR({
-  variable: "--font-noto-kr",
+// 본문: 또렷한 고딕 / 제목: 전단지처럼 굵은 서체
+const plexKr = IBM_Plex_Sans_KR({
+  variable: "--font-plex-kr",
   subsets: ["latin"],
-  weight: ["400", "500", "700", "800"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+const blackHan = Black_Han_Sans({
+  variable: "--font-black-han",
+  subsets: ["latin"],
+  weight: "400",
   display: "swap",
 });
 
@@ -27,10 +33,14 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
 };
 
+export const viewport: Viewport = {
+  themeColor: "#1b2236",
+};
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ko" className={`${notoKr.variable} h-full antialiased`} suppressHydrationWarning>
-      <body className="min-h-full flex flex-col">{children}</body>
+    <html lang="ko" className={`${plexKr.variable} ${blackHan.variable} h-full antialiased`} suppressHydrationWarning>
+      <body className="min-h-full flex flex-col bg-ground text-ink">{children}</body>
     </html>
   );
 }

@@ -6,9 +6,10 @@ function formatDate(iso?: string | null) {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("ko-KR", { month: "short", day: "numeric" });
+  return d.toLocaleDateString("ko-KR", { month: "long", day: "numeric", timeZone: "Asia/Seoul" });
 }
 
+/** 절취선이 있는 쿠폰 모양 카드 */
 export default function DealCard({ deal }: { deal: DealSummary }) {
   const cat = getCategory(deal.category) ?? ETC;
   const date = formatDate(deal.collectedAt ?? deal.publishedAt);
@@ -16,31 +17,31 @@ export default function DealCard({ deal }: { deal: DealSummary }) {
   return (
     <Link
       href={`/deal/${deal.id}`}
-      className="group flex flex-col rounded-2xl border border-slate-200 bg-white overflow-hidden
-                 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200"
+      className="group flex flex-col rounded-[18px] bg-paper ring-1 ring-rule/70 transition-shadow hover:ring-2 hover:ring-ink"
     >
-      <div className="relative aspect-[16/10] bg-slate-100 overflow-hidden">
-        <Thumb src={deal.image} alt={deal.title} accentColor={cat.color} />
-        <span
-          className="absolute top-2.5 left-2.5 text-[11px] font-semibold px-2.5 py-1 rounded-full backdrop-blur"
-          style={{ color: cat.color, background: `${cat.bg}CC` }}
-        >
-          {cat.label}
-        </span>
+      <div className="relative m-2 mb-0 aspect-[2/1] overflow-hidden rounded-[12px] bg-ground min-[440px]:aspect-[16/10]">
+        <Thumb src={deal.image} alt="" accentColor={cat.color} label={cat.label} />
+        {deal.fresh && (
+          <span className="absolute right-2 top-2 rotate-[-6deg] rounded-md bg-stamp px-2 py-0.5 text-[12px] font-bold text-ink shadow-sm">
+            신규
+          </span>
+        )}
       </div>
 
-      <div className="flex flex-col flex-grow px-4 py-3.5 gap-1.5">
-        <h3 className="text-[15px] font-semibold leading-snug text-slate-900 line-clamp-2
-                       group-hover:text-slate-950">
-          {deal.title}
-        </h3>
-        <div className="mt-auto flex items-center justify-between pt-2 text-xs text-slate-400">
-          <span className="truncate max-w-[65%]">{deal.source || "출처 미상"}</span>
-          <span className="shrink-0 flex items-center gap-2">
-            {deal.views > 0 && <span>조회 {deal.views.toLocaleString()}</span>}
-            {date && <span>{date}</span>}
-          </span>
-        </div>
+      <div className="py-3.5" aria-hidden>
+        <div className="perforation" />
+      </div>
+
+      <div className="flex flex-1 flex-col px-4 pb-4">
+        <p className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold" style={{ color: cat.color }}>
+          <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: cat.color }} />
+          {cat.label}
+        </p>
+        <h3 className="line-clamp-2 text-[15.5px] font-semibold leading-[1.45] text-ink">{deal.title}</h3>
+        <p className="mt-auto flex items-center justify-between gap-2 pt-3 text-[12.5px] text-muted">
+          <span className="truncate">{deal.source || "출처 미상"}</span>
+          {date && <span className="shrink-0 tabular-nums">{date}</span>}
+        </p>
       </div>
     </Link>
   );

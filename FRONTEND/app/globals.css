@@ -1,25 +1,76 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* ── 디자인 토큰 ────────────────────────────────────────────────────────
+   잉크(네이비) 글자 + 차가운 회색 바탕 + 흰 종이 카드, 강조색은 할인 스티커 노랑 하나.
+   색을 바꾸려면 여기 값만 고치면 사이트 전체가 바뀝니다. */
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-noto-kr);
+  --color-ink: #1b2236;
+  --color-ground: #eceef2;
+  --color-paper: #ffffff;
+  --color-stamp: #ffd23f;
+  --color-rule: #cfd4dd;
+  --color-muted: #646c80;
+
+  --font-sans: var(--font-plex-kr), "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-display: var(--font-black-han), var(--font-plex-kr), "Malgun Gothic", sans-serif;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--color-ground);
+  color: var(--color-ink);
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-noto-kr), "Malgun Gothic", system-ui, sans-serif;
+  font-family: var(--font-sans);
+  word-break: keep-all; /* 한글 단어가 줄 끝에서 쪼개지지 않게 */
+  overflow-wrap: anywhere;
+}
+
+/* 제목용 굵은 서체는 굵기를 하나만 가지므로 브라우저가 가짜 굵게를 만들지 않게 */
+.font-display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+/* ── 쿠폰 절취선 ────────────────────────────────────────────────────────
+   카드 양옆에 반원 홈을 파고 그 사이를 점선으로 잇는다.
+   홈은 바탕색 원을 겹쳐 그려서 '뜯어낼 수 있는 쿠폰'처럼 보이게 한다. */
+.perforation {
+  position: relative;
+  height: 0;
+  margin: 0 14px;
+  border-top: 2px dashed var(--color-rule);
+}
+.perforation::before,
+.perforation::after {
+  content: "";
+  position: absolute;
+  top: -12px;
+  width: 22px;
+  height: 22px;
+  border-radius: 9999px;
+  background: var(--perf-hole, var(--color-ground));
+  box-shadow: inset 0 0 0 1px var(--perf-edge, transparent);
+}
+.perforation::before {
+  left: -26px;
+}
+.perforation::after {
+  right: -26px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }

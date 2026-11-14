@@ -161,12 +161,16 @@ export function categorize(d: { title: string; query?: string | null }): Categor
 
 /** 목록 화면용 가벼운 데이터: 본문(content)은 빼고 카테고리를 붙인다.
  *  본문까지 넘기면 글 200개의 본문이 통째로 브라우저에 내려가 페이지가 무거워진다. */
-export type DealSummary = Omit<Deal, "content"> & { category: string };
+export type DealSummary = Omit<Deal, "content"> & {
+  category: string;
+  fresh: boolean; // 등록된 지 24시간 이내 → 카드에 '신규' 스티커
+};
 
 export function toSummary(d: Deal): DealSummary {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { content, ...rest } = d;
-  return { ...rest, category: categorize(d).slug };
+  const age = Date.now() - Date.parse(d.publishedAt);
+  return { ...rest, category: categorize(d).slug, fresh: age >= 0 && age < 86_400_000 };
 }
 
 /** 카테고리별 글 수 */

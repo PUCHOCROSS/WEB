@@ -5,6 +5,7 @@ import { cache } from "react";
 import { getDeal, bumpDealViews, isUuid } from "../../../lib/deals";
 import CoupangBox from "../../../components/CoupangBox";
 import SiteFooter from "../../../components/SiteFooter";
+import SiteHeader from "../../../components/SiteHeader";
 import { categorize } from "../../../lib/categories";
 import Thumb from "../../../components/Thumb";
 
@@ -61,73 +62,85 @@ export default async function DealDetailPage({ params }: Props) {
   const date = formatDate(deal.collectedAt ?? deal.publishedAt);
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col">
-      <header className="border-b border-slate-200 bg-white sticky top-0 z-10">
-        <div className="max-w-2xl mx-auto px-6 h-16 flex items-center">
-          <Link href="/" className="text-sm text-slate-500 hover:text-slate-800">
-            ← 목록으로
-          </Link>
-        </div>
-      </header>
+    <div className="flex min-h-screen flex-col">
+      <SiteHeader />
 
-      <main className="max-w-2xl mx-auto px-6 py-10 w-full flex-grow">
-        <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
-          <div className="relative aspect-[16/9] bg-slate-100">
-            <Thumb src={deal.image} alt={deal.title} accentColor={cat.color} />
+      <main className="mx-auto w-full max-w-2xl flex-grow px-5 pt-6 sm:px-8 sm:pt-10">
+        <Link href="/" className="mb-4 inline-block text-sm text-muted hover:text-ink">
+          목록으로 돌아가기
+        </Link>
+
+        <article className="rounded-[22px] bg-paper ring-1 ring-rule/70">
+          <div className="relative m-2.5 mb-0 aspect-[16/9] overflow-hidden rounded-[14px] bg-ground">
+            <Thumb src={deal.image} alt={deal.title} accentColor={cat.color} label={cat.label} />
           </div>
 
-          <div className="px-6 py-6">
+          <div className="px-5 pb-6 pt-5 sm:px-8 sm:pb-8 sm:pt-7">
             <Link
               href={`/category/${cat.slug}`}
-              className="inline-block text-[11px] font-semibold px-2.5 py-1 rounded-full mb-3 hover:opacity-80"
-              style={{ color: cat.color, background: cat.bg }}
+              className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-semibold hover:underline"
+              style={{ color: cat.color }}
             >
+              <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: cat.color }} />
               {cat.label}
             </Link>
 
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 mb-2">
-              {deal.title}
-            </h1>
+            <h1 className="text-[24px] font-bold leading-[1.35] tracking-tight sm:text-[28px]">{deal.title}</h1>
 
-            <div className="flex items-center gap-3 text-xs text-slate-400 mb-6">
-              <span>{deal.source || "출처 미상"}</span>
-              {date && (
-                <>
-                  <span>·</span>
-                  <span>{date}</span>
-                </>
-              )}
-              <span>·</span>
-              <span>조회 {views.toLocaleString()}</span>
-            </div>
-
-            {deal.content ? (
-              <div className="prose prose-slate max-w-none whitespace-pre-wrap leading-relaxed text-slate-700">
-                {deal.content}
+            <dl className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-muted">
+              <div className="flex gap-1.5">
+                <dt>출처</dt>
+                <dd className="text-ink">{deal.source || "알 수 없음"}</dd>
               </div>
+              {date && (
+                <div className="flex gap-1.5">
+                  <dt>등록</dt>
+                  <dd className="text-ink">{date}</dd>
+                </div>
+              )}
+              <div className="flex gap-1.5">
+                <dt>조회</dt>
+                <dd className="tabular-nums text-ink">{views.toLocaleString()}</dd>
+              </div>
+            </dl>
+          </div>
+
+          <div className="py-1" aria-hidden>
+            <div className="perforation" />
+          </div>
+
+          <div className="px-5 pb-6 pt-6 sm:px-8 sm:pb-8 sm:pt-7">
+            {deal.content ? (
+              <div className="whitespace-pre-wrap text-[16px] leading-[1.85] text-ink/90">{deal.content}</div>
             ) : (
-              <p className="text-slate-500 text-sm">등록된 본문이 없습니다. 아래 링크에서 원문을 확인해 주세요.</p>
+              <p className="text-[15px] text-muted">아직 정리된 내용이 없어요. 아래 버튼으로 원문을 확인해 주세요.</p>
             )}
 
             <a
               href={deal.link}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-8 inline-flex items-center justify-center w-full rounded-xl bg-slate-900
-                         text-white font-medium py-3 hover:bg-slate-800 transition-colors"
+              className="mt-8 flex w-full items-center justify-center gap-2 rounded-2xl bg-ink py-4 text-[16px]
+                         font-semibold text-paper transition-opacity hover:opacity-90"
             >
-              원문 보러 가기 ↗
+              원문에서 자세히 보기
+              <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2">
+                <path d="M7 17 17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
             </a>
+            <p className="mt-3 text-center text-[12.5px] text-muted">
+              행사 내용은 바뀔 수 있으니 참여 전에 원문에서 꼭 확인하세요.
+            </p>
           </div>
-        </div>
+        </article>
 
         <CoupangBox className="mt-6" />
 
-        <div className="mt-6 text-center">
-          <Link href={`/category/${cat.slug}`} className="text-sm text-slate-500 hover:text-slate-800 underline">
+        <p className="mt-8 text-center">
+          <Link href={`/category/${cat.slug}`} className="text-[15px] font-semibold text-ink underline underline-offset-4">
             {cat.label} 소식 더 보기
           </Link>
-        </div>
+        </p>
       </main>
 
       <SiteFooter />

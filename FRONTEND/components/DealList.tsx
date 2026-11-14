@@ -1,17 +1,19 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getCategory, type DealSummary } from "../lib/categories";
 import DealCard from "./DealCard";
 
-/** 카드 목록 + 검색창.
+/** 검색창 + (카테고리 칩) + 쿠폰 카드 목록.
  *  검색은 화면에 받아 둔 목록 안에서 바로 걸러낸다 (서버 요청 없음).
  *  주소에 ?q=검색어 가 있으면 그 값으로 시작하고, 입력하면 주소도 같이 바뀌어 공유할 수 있다. */
 export default function DealList({
   deals,
+  nav,
   emptyText = "아직 등록된 소식이 없습니다. 곧 새로운 쿠폰과 행사로 채워질 예정이에요.",
 }: {
   deals: DealSummary[];
+  nav?: ReactNode; // 검색창 아래에 놓을 카테고리 칩
   emptyText?: string;
 }) {
   const [q, setQ] = useState("");
@@ -39,51 +41,63 @@ export default function DealList({
     });
   }, [deals, q]);
 
-  if (deals.length === 0) {
-    return (
-      <p className="rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center text-slate-500">
-        {emptyText}
-      </p>
-    );
-  }
-
   return (
     <div>
-      <div className="relative mb-6">
-        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" aria-hidden>
-          🔍
-        </span>
+      <label className="relative mb-4 block">
+        <span className="sr-only">쿠폰·행사 검색</span>
+        <svg
+          aria-hidden
+          viewBox="0 0 24 24"
+          className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+        >
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
         <input
           type="search"
           value={q}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="브랜드나 상품으로 검색 (예: 스타벅스, 치킨, 편의점)"
-          aria-label="쿠폰·행사 검색"
-          className="w-full rounded-xl border border-slate-200 bg-white pl-11 pr-4 py-3 text-[15px]
-                     placeholder:text-slate-400 focus:outline-none focus:border-slate-400"
+          placeholder="스타벅스, 치킨, 편의점…"
+          className="w-full rounded-2xl bg-paper py-4 pl-12 pr-4 text-[16px] text-ink shadow-[0_1px_0_var(--color-rule)]
+                     ring-1 ring-rule placeholder:text-muted/80 focus:outline-none focus:ring-2 focus:ring-ink"
         />
-      </div>
+      </label>
+
+      {nav && <div className="mb-8">{nav}</div>}
 
       {q.trim() && (
-        <p className="mb-4 text-sm text-slate-500">
-          &lsquo;{q.trim()}&rsquo; 검색 결과 {filtered.length}건
+        <p className="mb-4 text-[15px]" aria-live="polite">
+          <strong className="font-semibold">&lsquo;{q.trim()}&rsquo;</strong> 검색 결과{" "}
+          <span className="tabular-nums">{filtered.length}</span>건
         </p>
       )}
 
-      {filtered.length === 0 ? (
-        <div className="rounded-2xl border border-slate-200 bg-white px-6 py-16 text-center text-slate-500">
-          <p>검색 결과가 없습니다.</p>
-          <button onClick={() => onChange("")} className="mt-3 text-sm text-slate-700 underline">
+      {deals.length === 0 ? (
+        <EmptyBox>{emptyText}</EmptyBox>
+      ) : filtered.length === 0 ? (
+        <EmptyBox>
+          찾는 소식이 없어요. 더 짧은 단어로 검색해 보세요.
+          <button onClick={() => onChange("")} className="mt-3 block w-full text-sm font-semibold text-ink underline">
             검색어 지우기
           </button>
-        </div>
+        </EmptyBox>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 gap-x-4 gap-y-5 min-[440px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {filtered.map((deal) => (
             <DealCard key={deal.id} deal={deal} />
           ))}
         </div>
       )}
     </div>
+  );
+}
+
+function EmptyBox({ children }: { children: ReactNode }) {
+  return (
+    <div className="rounded-[18px] border-2 border-dashed border-rule px-6 py-16 text-center text-muted">{children}</div>
   );
 }

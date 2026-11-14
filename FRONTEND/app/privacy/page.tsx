@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 // 내용을 바꾸면 시행일도 함께 바꿔 주세요.
 const EFFECTIVE_DATE = "2026년 11월 14일";
 
-const linkCls = "text-blue-600 underline";
+const linkCls = "font-semibold text-ink underline underline-offset-2";
 
 export default function PrivacyPage() {
   return (
@@ -28,6 +28,7 @@ export default function PrivacyPage() {
         <p>다만 서비스를 이용하는 과정에서 아래 정보가 자동으로 생성되어 수집될 수 있습니다.</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>접속 IP 주소, 브라우저 종류, 운영체제, 방문 일시, 방문한 페이지 등 접속 기록</li>
+          <li>방문 직전에 보던 사이트 주소(유입 경로). 어느 사이트에서 몇 명이 왔는지 날짜별 숫자로만 집계하며, 개인을 알아볼 수 있는 형태로는 저장하지 않습니다.</li>
           <li>쿠키 및 광고 식별자 (아래 4번 참고)</li>
         </ul>
         <p>

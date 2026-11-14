@@ -2,27 +2,33 @@
 
 import { useState } from "react";
 
+/** 대표 이미지. 없거나 깨지면 카테고리 색 바탕에 카테고리 이름을 크게 쓴 대체 이미지를 보여준다. */
 export default function Thumb({
   src,
   alt,
   accentColor,
+  label,
 }: {
   src?: string | null;
   alt: string;
   accentColor: string;
+  label?: string;
 }) {
   const [broken, setBroken] = useState(false);
 
   if (!src || broken) {
     return (
       <div
-        className="w-full h-full flex items-center justify-center"
+        className="flex h-full w-full items-center justify-center"
         style={{
-          background: `linear-gradient(135deg, ${accentColor}22, ${accentColor}05)`,
+          background: `${accentColor}14`,
+          backgroundImage: `radial-gradient(${accentColor}26 1.2px, transparent 1.2px)`,
+          backgroundSize: "14px 14px",
         }}
+        aria-hidden={!alt}
       >
-        <span className="text-3xl" style={{ color: accentColor }} aria-hidden>
-          🔖
+        <span className="font-display text-[clamp(20px,5vw,30px)] opacity-80" style={{ color: accentColor }}>
+          {label ?? "할인 소식"}
         </span>
       </div>
     );
@@ -35,8 +41,9 @@ export default function Thumb({
       src={src}
       alt={alt}
       loading="lazy"
+      referrerPolicy="no-referrer"
       onError={() => setBroken(true)}
-      className="w-full h-full object-cover"
+      className="h-full w-full object-cover"
     />
   );
 }
