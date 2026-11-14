@@ -52,8 +52,9 @@ export default async function CategoryPage({ params }: Props) {
     <div className="flex min-h-screen flex-col">
       <SiteHeader />
 
-      <main className="mx-auto w-full max-w-6xl flex-grow px-5 sm:px-8">
+      <main className="mx-auto w-full max-w-6xl flex-grow px-4 sm:px-6">
         <PageHero
+          icon={cat.slug}
           title={`${cat.label} 할인`}
           color={cat.color}
           sub={
@@ -64,9 +65,7 @@ export default async function CategoryPage({ params }: Props) {
         />
 
         {failed ? (
-          <p className="rounded-[18px] border-2 border-dashed border-rule px-6 py-16 text-center text-muted">
-            목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.
-          </p>
+          <p className="card px-6 py-16 text-center text-muted">목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.</p>
         ) : (
           <DealList
             deals={deals}

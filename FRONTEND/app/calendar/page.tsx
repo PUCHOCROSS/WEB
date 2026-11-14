@@ -1,13 +1,12 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import MonthCalendar from "../../components/MonthCalendar";
+import CalendarBoard from "../../components/CalendarBoard";
 import PageHero from "../../components/PageHero";
-import PeriodBadge, { periodText } from "../../components/PeriodBadge";
+import RecommendCard from "../../components/RecommendCard";
 import SiteFooter from "../../components/SiteFooter";
 import SiteHeader from "../../components/SiteHeader";
 import TodaySlider from "../../components/TodaySlider";
 import { toCalEvent, type CalEvent } from "../../lib/calendar";
-import { ETC, getCategory, toSummary, type DealSummary } from "../../lib/categories";
+import { toSummary, type DealSummary } from "../../lib/categories";
 import { listDeals } from "../../lib/deals";
 import { addDays, diffDays, formatDay, isDay, kstToday, weekdayOf } from "../../lib/period";
 
@@ -50,7 +49,6 @@ export default async function CalendarPage({ searchParams }: Props) {
     failed = true;
   }
   const events = deals.map(toCalEvent).filter((e): e is CalEvent => e !== null);
-  const inMonth = events.filter((e) => e.start <= last && e.end >= first);
   const byId = new Map(deals.map((d) => [d.id, d]));
 
   // 오늘 날짜에 걸쳐 있는 행사 (마감이 가까운 순). 시작일만 아는 행사는 시작 후 30일까지
@@ -59,107 +57,55 @@ export default async function CalendarPage({ searchParams }: Props) {
     .sort((a, b) => (a.endsOn ?? "9999").localeCompare(b.endsOn ?? "9999"))
     .map((e) => byId.get(e.id)!)
     .filter(Boolean);
-  const upcoming = events
-    .filter((e) => e.startsOn && e.startsOn > today)
-    .sort((a, b) => a.start.localeCompare(b.start))
-    .slice(0, 12);
-
-  const monthLabel = `${+ym.slice(5, 7)}월`;
-  const yearLabel = ym.slice(0, 4) !== today.slice(0, 4) ? `${ym.slice(0, 4)}년 ` : "";
+  const upcoming = deals
+    .filter((d) => d.startsOn && d.startsOn > today)
+    .sort((a, b) => a.startsOn!.localeCompare(b.startsOn!))
+    .slice(0, 6);
 
   return (
     <div className="flex min-h-screen flex-col">
-      <SiteHeader />
+      <SiteHeader active="calendar" />
 
-      <main className="mx-auto w-full max-w-6xl flex-grow px-5 sm:px-8">
-        <PageHero
-          title={`${yearLabel}${monthLabel} 행사 달력`}
-          sub={
-            failed
-              ? "목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요."
-              : inMonth.length > 0
-                ? `${monthLabel}에 진행되는 쿠폰과 할인 행사 ${inMonth.length}건이에요. 날짜를 누르면 그날 행사를 볼 수 있어요.`
-                : `${monthLabel}에는 기간이 알려진 행사가 아직 없어요.`
-          }
-        />
+      <main className="mx-auto w-full max-w-6xl flex-grow px-4 sm:px-6">
+        <PageHero icon="calendar" title="행사 달력" sub="지금 진행 중인 다양한 행사와 쿠폰을 달력에서 확인하세요!" />
 
-        {!failed && <TodaySlider items={todayItems} dateLabel={formatDay(today)} />}
+        {failed ? (
+          <p className="card px-6 py-16 text-center text-muted">목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.</p>
+        ) : (
+          <>
+            <TodaySlider items={todayItems} dateLabel={formatDay(today)} />
 
-        <nav aria-label="달 이동" className="mb-4 flex items-center gap-2">
-          <MonthLink href={`/calendar?m=${shiftMonth(ym, -1)}`} label="이전 달">
-            <path d="m15 18-6-6 6-6" />
-          </MonthLink>
-          <h2 className="font-display min-w-[7.5rem] text-center text-[24px] tabular-nums sm:text-[28px]">
-            {ym.slice(0, 4)}. {+ym.slice(5, 7)}월
-          </h2>
-          <MonthLink href={`/calendar?m=${shiftMonth(ym, 1)}`} label="다음 달">
-            <path d="m9 18 6-6-6-6" />
-          </MonthLink>
-          {ym !== today.slice(0, 7) && (
-            <Link href="/calendar" className="ml-1 rounded-full bg-ink px-4 py-2 text-[14px] font-semibold text-paper">
-              이번 달로
-            </Link>
-          )}
-        </nav>
+            <CalendarBoard
+              key={ym}
+              events={events}
+              weeks={weeks}
+              first={first}
+              last={last}
+              today={today}
+              initialDay={initialDay}
+              monthTitle={`${ym.slice(0, 4)}년 ${+ym.slice(5, 7)}월`}
+              prevHref={`/calendar?m=${shiftMonth(ym, -1)}`}
+              nextHref={`/calendar?m=${shiftMonth(ym, 1)}`}
+            />
 
-        <MonthCalendar
-          key={ym}
-          events={events}
-          weeks={weeks}
-          first={first}
-          last={last}
-          today={today}
-          initialDay={initialDay}
-        />
-
-        <section className="mt-12">
-          <h2 className="font-display text-[28px] leading-tight">곧 시작</h2>
-          <p className="mb-4 mt-1 text-[13px] text-muted">시작이 빠른 순서</p>
-          {upcoming.length === 0 ? (
-            <p className="rounded-[18px] border-2 border-dashed border-rule px-6 py-10 text-center text-muted">
-              예정된 행사가 아직 없어요.
-            </p>
-          ) : (
-            <ul className="divide-y divide-rule/70 overflow-hidden rounded-[18px] bg-paper ring-1 ring-rule/70 lg:w-1/2">
-              {upcoming.map((e) => {
-                const cat = getCategory(e.category) ?? ETC;
-                return (
-                  <li key={e.id}>
-                    <Link href={`/deal/${e.id}`} className="flex items-center gap-3 px-4 py-3.5 hover:bg-ground/50">
-                      <span aria-hidden className="h-9 w-1 shrink-0 rounded-full" style={{ background: cat.color }} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[15px] font-semibold">{e.title}</span>
-                        <span className="mt-0.5 block text-[13px] tabular-nums text-muted">
-                          {cat.label}
-                          <span className="mx-1.5">|</span>
-                          {periodText(e.startsOn, e.endsOn)}
-                        </span>
-                      </span>
-                      <PeriodBadge badge={e.badge} />
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </section>
+            <section className="mt-12">
+              <h2 className="text-[21px] font-bold">곧 시작하는 행사</h2>
+              <p className="mb-4 mt-1 text-[14px] text-muted">시작이 빠른 순서</p>
+              {upcoming.length === 0 ? (
+                <p className="card px-6 py-10 text-center text-muted">예정된 행사가 아직 없어요.</p>
+              ) : (
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  {upcoming.map((d) => (
+                    <RecommendCard key={d.id} deal={d} layout="row" />
+                  ))}
+                </div>
+              )}
+            </section>
+          </>
+        )}
       </main>
 
       <SiteFooter />
     </div>
-  );
-}
-
-function MonthLink({ href, label, children }: { href: string; label: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      aria-label={label}
-      className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-paper ring-1 ring-rule hover:ring-ink"
-    >
-      <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-        {children}
-      </svg>
-    </Link>
   );
 }

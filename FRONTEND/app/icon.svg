@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#1B2236"/>
+  <rect width="64" height="64" rx="14" fill="#16A35A"/>
   <mask id="cut">
     <rect width="64" height="64" fill="#fff"/>
     <circle cx="6" cy="32" r="6.5" fill="#000"/>
     <circle cx="58" cy="32" r="6.5" fill="#000"/>
   </mask>
-  <rect x="6" y="13" width="52" height="38" rx="5" fill="#FFD23F" mask="url(#cut)"/>
-  <path d="M42 17V47" stroke="#1B2236" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 5.9"/>
-  <path d="M17 42 31 22" stroke="#1B2236" stroke-width="4" stroke-linecap="round"/>
-  <circle cx="17.5" cy="24" r="4" fill="#1B2236"/>
-  <circle cx="30.5" cy="40" r="4" fill="#1B2236"/>
+  <rect x="6" y="13" width="52" height="38" rx="5" fill="#FFFFFF" mask="url(#cut)"/>
+  <path d="M42 17V47" stroke="#16A35A" stroke-width="3" stroke-linecap="round" stroke-dasharray="0.1 5.9"/>
+  <path d="M17 42 31 22" stroke="#16A35A" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="17.5" cy="24" r="4" fill="#16A35A"/>
+  <circle cx="30.5" cy="40" r="4" fill="#16A35A"/>
 </svg>

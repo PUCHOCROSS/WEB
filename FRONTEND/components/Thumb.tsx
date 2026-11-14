@@ -1,35 +1,31 @@
 "use client";
 
 import { useState } from "react";
+import CategoryIcon from "./CategoryIcon";
 
-/** 대표 이미지. 없거나 깨지면 카테고리 색 바탕에 카테고리 이름을 크게 쓴 대체 이미지를 보여준다. */
+/** 대표 이미지. 없거나 깨지면 카테고리 색 바탕에 카테고리 아이콘을 보여준다. */
 export default function Thumb({
   src,
   alt,
   accentColor,
-  label,
+  slug = "etc",
+  iconClass = "h-10 w-10",
+  fit = "cover",
 }: {
   src?: string | null;
   alt: string;
   accentColor: string;
-  label?: string;
+  slug?: string;
+  label?: string; // (예전 호환용, 쓰지 않음)
+  iconClass?: string;
+  fit?: "cover" | "contain";
 }) {
   const [broken, setBroken] = useState(false);
 
   if (!src || broken) {
     return (
-      <div
-        className="flex h-full w-full items-center justify-center"
-        style={{
-          background: `${accentColor}14`,
-          backgroundImage: `radial-gradient(${accentColor}26 1.2px, transparent 1.2px)`,
-          backgroundSize: "14px 14px",
-        }}
-        aria-hidden={!alt}
-      >
-        <span className="font-display text-[clamp(20px,5vw,30px)] opacity-80" style={{ color: accentColor }}>
-          {label ?? "할인 소식"}
-        </span>
+      <div className="flex h-full w-full items-center justify-center" style={{ background: `${accentColor}14`, color: accentColor }}>
+        <CategoryIcon slug={slug} className={iconClass} />
       </div>
     );
   }
@@ -43,7 +39,7 @@ export default function Thumb({
       loading="lazy"
       referrerPolicy="no-referrer"
       onError={() => setBroken(true)}
-      className="h-full w-full object-cover"
+      className={`h-full w-full ${fit === "contain" ? "object-contain p-2" : "object-cover"}`}
     />
   );
 }

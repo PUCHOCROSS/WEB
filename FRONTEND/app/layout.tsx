@@ -1,19 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Black_Han_Sans, IBM_Plex_Sans_KR } from "next/font/google";
+import { Noto_Sans_KR } from "next/font/google";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_URL } from "../lib/site";
 import "./globals.css";
 
-// 본문: 또렷한 고딕 / 제목: 전단지처럼 굵은 서체
-const plexKr = IBM_Plex_Sans_KR({
-  variable: "--font-plex-kr",
+const notoKr = Noto_Sans_KR({
+  variable: "--font-noto-kr",
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
-const blackHan = Black_Han_Sans({
-  variable: "--font-black-han",
-  subsets: ["latin"],
-  weight: "400",
+  weight: ["400", "500", "700", "800"],
   display: "swap",
 });
 
@@ -34,13 +27,13 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1b2236",
+  themeColor: "#16a35a",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="ko" className={`${plexKr.variable} ${blackHan.variable} h-full antialiased`} suppressHydrationWarning>
-      <body className="min-h-full flex flex-col bg-ground text-ink">{children}</body>
+    <html lang="ko" className={`${notoKr.variable} h-full antialiased`} suppressHydrationWarning>
+      <body className="flex min-h-full flex-col bg-ground text-ink">{children}</body>
     </html>
   );
 }

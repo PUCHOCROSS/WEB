@@ -22,7 +22,7 @@ export default function CoupangBox({ className = "" }: { className?: string }) {
   if (!src) return null;
 
   return (
-    <aside className={`rounded-[22px] bg-paper px-5 py-4 ring-1 ring-rule/70 ${className}`}>
+    <aside className={`card px-5 py-4 ${className}`}>
       <div className="flex items-baseline justify-between mb-2">
         <p className="text-[15px] font-semibold text-ink">함께 보면 좋은 할인 상품</p>
         <span className="text-[12px] text-muted">광고</span>

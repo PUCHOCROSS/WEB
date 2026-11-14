@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ETC, getCategory, type DealSummary } from "../lib/categories";
-import { periodText } from "./PeriodBadge";
+import PeriodBadge, { CalendarGlyph, periodLong } from "./PeriodBadge";
+import Thumb from "./Thumb";
 
 const AUTO_MS = 5000;
 
@@ -71,7 +72,7 @@ export default function TodaySlider({ items, dateLabel }: { items: DealSummary[]
     return (
       <section className="mb-10">
         <SliderHead dateLabel={dateLabel} count={0} />
-        <p className="rounded-[18px] border-2 border-dashed border-rule px-6 py-10 text-center text-muted">
+        <p className="card px-6 py-10 text-center text-muted">
           오늘 진행 중인 행사가 아직 없어요. 아래 달력에서 다가오는 행사를 확인해 보세요.
         </p>
       </section>
@@ -128,7 +129,7 @@ export default function TodaySlider({ items, dateLabel }: { items: DealSummary[]
               key={d.id}
               tabIndex={-1}
               onClick={() => manual(i)}
-              className={`h-1.5 rounded-full transition-all ${i === index ? "w-5 bg-ink" : "w-1.5 bg-rule hover:bg-muted"}`}
+              className={`h-1.5 rounded-full transition-all ${i === index ? "w-5 bg-brand" : "w-1.5 bg-rule hover:bg-muted"}`}
             />
           ))}
         </div>
@@ -144,7 +145,12 @@ function SliderHead({ dateLabel, count, children }: { dateLabel: string; count: 
   return (
     <div className="mb-4 flex items-end justify-between gap-4">
       <div>
-        <h2 className="font-display text-[28px] leading-tight sm:text-[32px]">오늘의 행사</h2>
+        <h2 className="flex items-center gap-2 text-[20px] font-bold">
+          <svg viewBox="0 0 24 24" className="h-6 w-6 text-brand" fill="currentColor" aria-hidden>
+            <path d="M3 10.2v3.6c0 .7.5 1.2 1.2 1.2H6l1.2 4.4c.2.7.8 1.1 1.5 1.1h.6c.8 0 1.4-.8 1.2-1.6L9.7 15H11l6.8 3.7c.8.4 1.7-.2 1.7-1V6.3c0-.9-.9-1.4-1.7-1L11 9H4.2C3.5 9 3 9.5 3 10.2Z" />
+          </svg>
+          오늘의 행사
+        </h2>
         <p className="mt-1 text-[14px] text-muted">
           {dateLabel}
           {count > 0 && <>, 지금 참여할 수 있는 행사 {count}건</>}
@@ -161,7 +167,7 @@ function ArrowButton({ label, onClick, children }: { label: string; onClick: () 
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-paper ring-1 ring-rule hover:ring-ink"
+      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-rule bg-white hover:border-brand/60"
     >
       <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         {children}
@@ -170,13 +176,9 @@ function ArrowButton({ label, onClick, children }: { label: string; onClick: () 
   );
 }
 
-/** 가로형 쿠폰: 왼쪽 꼬리(남은 날) | 세로 절취선 | 오른쪽 본문 */
+/** 오늘의 행사 카드: 상태 / 제목 / 기간 | 이미지 */
 function TicketSlide({ deal, label }: { deal: DealSummary; label: string }) {
   const cat = getCategory(deal.category) ?? ETC;
-  const badge = deal.badge;
-  const big = badge?.text ?? "진행 중";
-  const urgent = badge?.tone === "urgent";
-
   return (
     <div
       role="group"
@@ -184,36 +186,28 @@ function TicketSlide({ deal, label }: { deal: DealSummary; label: string }) {
       aria-label={label}
       className="flex w-[86%] shrink-0 snap-start sm:w-[calc(50%-6px)] lg:w-[calc(33.333%-8px)]"
     >
-    <Link
-      href={`/deal/${deal.id}`}
-      className="group flex w-full rounded-[18px] bg-paper ring-1 ring-rule/70 hover:ring-2 hover:ring-ink"
-    >
-      <div
-        className="flex w-[104px] shrink-0 flex-col items-center justify-center rounded-l-[18px] px-2 text-center"
-        style={{ background: urgent ? "var(--color-ink)" : cat.bg }}
+      <Link
+        href={`/deal/${deal.id}`}
+        className="flex w-full items-center gap-4 rounded-[18px] border border-rule p-4 transition-colors hover:border-brand/50"
+        style={{ background: `linear-gradient(135deg, ${cat.color}12, #ffffff 58%)` }}
       >
-        <span
-          className="font-display text-[26px] leading-none"
-          style={{ color: urgent ? "var(--color-stamp)" : cat.color }}
-        >
-          {big}
-        </span>
-        <span className="mt-2 text-[11.5px] font-semibold" style={{ color: urgent ? "#fff" : cat.color }}>
-          {deal.endsOn ? `${+deal.endsOn.slice(5, 7)}/${+deal.endsOn.slice(8, 10)} 마감` : "마감일 미정"}
-        </span>
-      </div>
-
-      <div className="perforation-v" aria-hidden />
-
-      <div className="flex min-w-0 flex-1 flex-col py-4 pl-4 pr-4">
-        <p className="mb-1 flex items-center gap-1.5 text-[12.5px] font-semibold" style={{ color: cat.color }}>
-          <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: cat.color }} />
-          {cat.label}
-        </p>
-        <h3 className="line-clamp-2 text-[15.5px] font-semibold leading-[1.45]">{deal.title}</h3>
-        <p className="mt-auto pt-2 text-[13px] tabular-nums text-muted">행사 {periodText(deal.startsOn, deal.endsOn)}</p>
-      </div>
-    </Link>
+        <div className="min-w-0 flex-1">
+          <div className="mb-1.5 flex items-center gap-2">
+            <PeriodBadge badge={deal.badge} />
+            <span className="truncate text-[12.5px] font-semibold" style={{ color: cat.color }}>
+              {cat.label}
+            </span>
+          </div>
+          <h3 className="line-clamp-2 text-[16px] font-bold leading-snug">{deal.title}</h3>
+          <p className="mt-1.5 flex items-center gap-1.5 text-[12.5px] tabular-nums text-muted">
+            <CalendarGlyph />
+            {periodLong(deal.startsOn, deal.endsOn)}
+          </p>
+        </div>
+        <div className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded-2xl border border-rule bg-white">
+          <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.slug} iconClass="h-8 w-8" />
+        </div>
+      </Link>
     </div>
   );
 }

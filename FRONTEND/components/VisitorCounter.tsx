@@ -54,8 +54,9 @@ export default function VisitorCounter() {
   if (today === null || today === 0) return null;
 
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-stamp/90 px-3 py-1 text-[13px] font-semibold text-ink">
-      오늘 {today.toLocaleString()}명 방문
+    <span className="hidden items-center gap-1.5 rounded-full border border-rule bg-white px-3 py-1 text-[12.5px] font-semibold text-muted sm:inline-flex">
+      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-brand" />
+      오늘 <span className="tabular-nums text-ink">{today.toLocaleString()}</span>명
     </span>
   );
 }

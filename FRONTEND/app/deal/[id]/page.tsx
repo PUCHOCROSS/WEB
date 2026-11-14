@@ -7,8 +7,9 @@ import CoupangBox from "../../../components/CoupangBox";
 import SiteFooter from "../../../components/SiteFooter";
 import SiteHeader from "../../../components/SiteHeader";
 import { categorize } from "../../../lib/categories";
-import { dealPeriod, formatDay, periodBadge, periodStatus } from "../../../lib/period";
-import PeriodBadge from "../../../components/PeriodBadge";
+import { dealPeriod, periodBadge, periodStatus } from "../../../lib/period";
+import PeriodBadge, { periodLong } from "../../../components/PeriodBadge";
+import CategoryIcon from "../../../components/CategoryIcon";
 import Thumb from "../../../components/Thumb";
 
 // 조회수는 매 방문마다 올라가므로 캐시하지 않는다.
@@ -70,112 +71,96 @@ export default async function DealDetailPage({ params }: Props) {
     <div className="flex min-h-screen flex-col">
       <SiteHeader />
 
-      <main className="mx-auto w-full max-w-2xl flex-grow px-5 pt-6 sm:px-8 sm:pt-10">
-        <Link href="/" className="mb-4 inline-block text-sm text-muted hover:text-ink">
-          목록으로 돌아가기
+      <main className="mx-auto w-full max-w-3xl flex-grow px-4 pt-6 sm:px-6 sm:pt-10">
+        <Link href="/" className="mb-4 inline-flex items-center gap-1 text-[14px] font-semibold text-muted hover:text-ink">
+          ‹ 목록으로
         </Link>
 
-        <article className="rounded-[22px] bg-paper ring-1 ring-rule/70">
-          <div className="relative m-2.5 mb-0 aspect-[16/9] overflow-hidden rounded-[14px] bg-ground">
-            <Thumb src={deal.image} alt={deal.title} accentColor={cat.color} label={cat.label} />
+        <article className="card overflow-hidden">
+          <div className="relative m-3 mb-0 aspect-[16/9] overflow-hidden rounded-[16px] bg-ground">
+            <Thumb src={deal.image} alt={deal.title} accentColor={cat.color} slug={cat.slug} iconClass="h-16 w-16" />
           </div>
 
           <div className="px-5 pb-6 pt-5 sm:px-8 sm:pb-8 sm:pt-7">
-            <Link
-              href={`/category/${cat.slug}`}
-              className="mb-3 inline-flex items-center gap-1.5 text-[13px] font-semibold hover:underline"
-              style={{ color: cat.color }}
-            >
-              <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: cat.color }} />
-              {cat.label}
-            </Link>
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <PeriodBadge badge={badge} size="md" />
+              <Link
+                href={`/category/${cat.slug}`}
+                className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[13px] font-semibold hover:brightness-95"
+                style={{ color: cat.color, background: cat.bg }}
+              >
+                <CategoryIcon slug={cat.slug} className="h-4 w-4" />
+                {cat.label}
+              </Link>
+            </div>
 
-            <h1 className="text-[24px] font-bold leading-[1.35] tracking-tight sm:text-[28px]">{deal.title}</h1>
+            <h1 className="text-[24px] font-extrabold leading-[1.35] tracking-tight sm:text-[30px]">{deal.title}</h1>
 
-            <dl className="mt-4 flex flex-wrap gap-x-5 gap-y-1 text-[13px] text-muted">
+            <dl className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-[13.5px] text-muted">
               <div className="flex gap-1.5">
                 <dt>출처</dt>
-                <dd className="text-ink">{deal.source || "알 수 없음"}</dd>
+                <dd className="font-medium text-ink">{deal.source || "알 수 없음"}</dd>
               </div>
               {date && (
                 <div className="flex gap-1.5">
                   <dt>등록</dt>
-                  <dd className="text-ink">{date}</dd>
+                  <dd className="font-medium text-ink">{date}</dd>
                 </div>
               )}
               <div className="flex gap-1.5">
                 <dt>조회</dt>
-                <dd className="tabular-nums text-ink">{views.toLocaleString()}</dd>
+                <dd className="font-medium tabular-nums text-ink">{views.toLocaleString()}</dd>
               </div>
             </dl>
-          </div>
 
-          {(period.start || period.end) && (
-            <div className="mx-5 mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-ground px-4 py-3.5 sm:mx-8">
-              <div>
-                <p className="text-[13px] text-muted">행사 기간</p>
-                <p className="text-[16px] font-semibold tabular-nums">
-                  {period.start && period.end ? (
-                    <>
-                      {formatDay(period.start)}
-                      <span className="mx-1.5 text-muted">~</span>
-                      {formatDay(period.end)}
-                    </>
-                  ) : period.end ? (
-                    `${formatDay(period.end)}까지`
-                  ) : (
-                    `${formatDay(period.start!)}부터`
-                  )}
-                </p>
-                {period.inferred && (
-                  <p className="mt-0.5 text-[12px] text-muted">본문에서 읽은 날짜예요. 정확한 기간은 원문에서 확인하세요.</p>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <PeriodBadge badge={badge} size="md" />
+            {(period.start || period.end) && (
+              <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-brand-soft px-4 py-3.5">
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-brand" aria-hidden>
+                    <CategoryIcon slug="calendar" className="h-5 w-5" />
+                  </span>
+                  <div>
+                    <p className="text-[12.5px] font-semibold text-brand-dark">행사 기간</p>
+                    <p className="text-[16px] font-bold tabular-nums">{periodLong(period.start, period.end)}</p>
+                    {period.inferred && <p className="text-[12px] text-muted">본문에서 읽은 날짜예요. 정확한 기간은 원문에서 확인하세요.</p>}
+                  </div>
+                </div>
                 {status !== "ended" && (
-                  <Link href="/calendar" className="text-[13px] font-semibold text-ink underline underline-offset-2">
-                    달력에서 보기
+                  <Link href={`/calendar${period.start ? `?d=${period.start}` : ""}`} className="text-[13.5px] font-semibold text-brand-dark hover:underline">
+                    달력에서 보기 ›
                   </Link>
                 )}
               </div>
-            </div>
-          )}
-
-          <div className="py-1" aria-hidden>
-            <div className="perforation" />
-          </div>
-
-          <div className="px-5 pb-6 pt-6 sm:px-8 sm:pb-8 sm:pt-7">
-            {deal.content ? (
-              <div className="whitespace-pre-wrap text-[16px] leading-[1.85] text-ink/90">{deal.content}</div>
-            ) : (
-              <p className="text-[15px] text-muted">아직 정리된 내용이 없어요. 아래 버튼으로 원문을 확인해 주세요.</p>
             )}
+
+            <div className="mt-7 border-t border-rule pt-6">
+              {deal.content ? (
+                <div className="whitespace-pre-wrap text-[16px] leading-[1.85] text-ink/90">{deal.content}</div>
+              ) : (
+                <p className="text-[15px] text-muted">아직 정리된 내용이 없어요. 아래 버튼으로 원문을 확인해 주세요.</p>
+              )}
+            </div>
 
             <a
               href={deal.link}
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-8 flex w-full items-center justify-center gap-2 rounded-2xl bg-ink py-4 text-[16px]
-                         font-semibold text-paper transition-opacity hover:opacity-90"
+              className="mt-8 flex w-full items-center justify-center gap-2 rounded-full bg-brand py-4 text-[16px] font-bold text-white transition-colors hover:bg-brand-dark"
             >
               원문에서 자세히 보기
-              <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.2">
+              <svg aria-hidden viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.4">
                 <path d="M7 17 17 7M9 7h8v8" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
             </a>
-            <p className="mt-3 text-center text-[12.5px] text-muted">
-              행사 내용은 바뀔 수 있으니 참여 전에 원문에서 꼭 확인하세요.
-            </p>
+            <p className="mt-3 text-center text-[12.5px] text-muted">행사 내용은 바뀔 수 있으니 참여 전에 원문에서 꼭 확인하세요.</p>
           </div>
         </article>
 
         <CoupangBox className="mt-6" />
 
         <p className="mt-8 text-center">
-          <Link href={`/category/${cat.slug}`} className="text-[15px] font-semibold text-ink underline underline-offset-4">
-            {cat.label} 소식 더 보기
+          <Link href={`/category/${cat.slug}`} className="text-[15px] font-semibold text-brand-dark hover:underline">
+            {cat.label} 소식 더 보기 ›
           </Link>
         </p>
       </main>

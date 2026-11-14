@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ETC, getCategory, type DealSummary } from "../lib/categories";
-import PeriodBadge, { periodText } from "./PeriodBadge";
+import PeriodBadge, { CalendarGlyph, periodLong } from "./PeriodBadge";
 import Thumb from "./Thumb";
 
 function formatDate(iso?: string | null) {
@@ -10,48 +10,47 @@ function formatDate(iso?: string | null) {
   return d.toLocaleDateString("ko-KR", { month: "long", day: "numeric", timeZone: "Asia/Seoul" });
 }
 
-/** 절취선이 있는 쿠폰 모양 카드 */
+/** 목록 카드: 이미지 / 상태·카테고리 / 제목 / 기간 */
 export default function DealCard({ deal }: { deal: DealSummary }) {
   const cat = getCategory(deal.category) ?? ETC;
-  const date = formatDate(deal.collectedAt ?? deal.publishedAt);
-  const period = periodText(deal.startsOn, deal.endsOn);
+  const period = periodLong(deal.startsOn, deal.endsOn);
   const ended = deal.badge?.tone === "ended";
 
   return (
     <Link
       href={`/deal/${deal.id}`}
-      className={`group flex flex-col rounded-[18px] bg-paper ring-1 ring-rule/70 transition-shadow hover:ring-2 hover:ring-ink ${
+      className={`card group flex flex-col overflow-hidden p-2.5 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
         ended ? "opacity-60 hover:opacity-100" : ""
       }`}
     >
-      <div className="relative m-2 mb-0 aspect-[2/1] overflow-hidden rounded-[12px] bg-ground min-[440px]:aspect-[16/10]">
-        <Thumb src={deal.image} alt="" accentColor={cat.color} label={cat.label} />
+      <div className="relative aspect-[16/10] overflow-hidden rounded-[14px] bg-ground">
+        <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.slug} />
         {deal.fresh && (
-          <span className="absolute right-2 top-2 rotate-[-6deg] rounded-md bg-stamp px-2 py-0.5 text-[12px] font-bold text-ink shadow-sm">
-            신규
+          <span className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-0.5 text-[11.5px] font-bold text-brand-dark shadow-sm">
+            NEW
           </span>
         )}
       </div>
 
-      <div className="py-3.5" aria-hidden>
-        <div className="perforation" />
-      </div>
-
-      <div className="flex flex-1 flex-col px-4 pb-4">
-        <p className="mb-1.5 flex items-center gap-1.5 text-[12.5px] font-semibold" style={{ color: cat.color }}>
-          <span aria-hidden className="h-1.5 w-1.5 rounded-full" style={{ background: cat.color }} />
-          {cat.label}
-        </p>
-        <h3 className="line-clamp-2 text-[15.5px] font-semibold leading-[1.45] text-ink">{deal.title}</h3>
-        {period && <p className="mt-1.5 text-[13px] font-medium tabular-nums text-ink/70">행사 {period}</p>}
-        <p className="mt-auto flex items-center justify-between gap-2 pt-3 text-[12.5px] text-muted">
-          <span className="truncate">{deal.source || "출처 미상"}</span>
-          {deal.badge ? (
-            <PeriodBadge badge={deal.badge} />
+      <div className="flex flex-1 flex-col px-1.5 pb-1.5 pt-3">
+        <div className="mb-1.5 flex items-center gap-2">
+          <PeriodBadge badge={deal.badge} />
+          <span className="truncate text-[12.5px] font-semibold" style={{ color: cat.color }}>
+            {cat.label}
+          </span>
+        </div>
+        <h3 className="line-clamp-2 text-[15.5px] font-bold leading-[1.45] text-ink">{deal.title}</h3>
+        <div className="mt-auto pt-2.5 text-[12.5px] text-muted">
+          {period ? (
+            <p className="flex items-center gap-1.5 tabular-nums">
+              <CalendarGlyph />
+              {period}
+            </p>
           ) : (
-            date && <span className="shrink-0 tabular-nums">{date}</span>
+            <p className="tabular-nums">{formatDate(deal.collectedAt ?? deal.publishedAt)} 등록</p>
           )}
-        </p>
+          <p className="mt-0.5 truncate">{deal.source || "출처 미상"}</p>
+        </div>
       </div>
     </Link>
   );

@@ -7,6 +7,8 @@ export type CalEvent = {
   id: string;
   title: string;
   category: string;
+  image: string | null;
+  source: string;
   start: string; // 달력에 그릴 시작일
   end: string; // 달력에 그릴 종료일
   startsOn: string | null; // 실제로 알려진 시작일 (없으면 null)
@@ -30,6 +32,8 @@ export function toCalEvent(d: DealSummary): CalEvent | null {
     id: d.id,
     title: d.title,
     category: d.category,
+    image: d.image,
+    source: d.source,
     start,
     end,
     startsOn: d.startsOn,
