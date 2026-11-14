@@ -4,9 +4,10 @@ import PageHero from "../../components/PageHero";
 import PeriodBadge, { periodText } from "../../components/PeriodBadge";
 import SiteFooter from "../../components/SiteFooter";
 import SiteHeader from "../../components/SiteHeader";
+import TodaySlider from "../../components/TodaySlider";
 import { ETC, getCategory, toSummary, type DealSummary } from "../../lib/categories";
 import { listDeals } from "../../lib/deals";
-import { addDays, diffDays, kstToday, periodStatus, weekdayOf } from "../../lib/period";
+import { addDays, diffDays, formatDay, kstToday, periodStatus, weekdayOf } from "../../lib/period";
 
 export const metadata: Metadata = {
   title: "행사 달력",
@@ -95,6 +96,12 @@ export default async function CalendarPage({ searchParams }: Props) {
     .filter((e) => periodStatus({ start: e.deal.startsOn, end: e.deal.endsOn }, today) === "ongoing")
     .sort((a, b) => (a.deal.endsOn ?? "9999").localeCompare(b.deal.endsOn ?? "9999"))
     .slice(0, 12);
+  // 오늘 날짜에 걸쳐 있는 행사 (마감이 가까운 순)
+  const todayItems = events
+    .filter((e) => e.start <= today && e.end >= today && !e.openEnd)
+    .concat(events.filter((e) => e.openEnd && e.start <= today && diffDays(today, e.start) <= 30)) // 시작일만 아는 행사는 시작 후 30일까지
+    .sort((a, b) => (a.deal.endsOn ?? "9999").localeCompare(b.deal.endsOn ?? "9999"))
+    .map((e) => e.deal);
   const upcoming = events
     .filter((e) => periodStatus({ start: e.deal.startsOn, end: e.deal.endsOn }, today) === "upcoming")
     .sort((a, b) => a.start.localeCompare(b.start))
@@ -119,10 +126,15 @@ export default async function CalendarPage({ searchParams }: Props) {
           }
         />
 
+        {!failed && <TodaySlider items={todayItems} dateLabel={formatDay(today)} />}
+
         <nav aria-label="달 이동" className="mb-4 flex items-center gap-2">
           <MonthLink href={`/calendar?m=${shiftMonth(ym, -1)}`} label="이전 달">
             <path d="m15 18-6-6 6-6" />
           </MonthLink>
+          <h2 className="font-display min-w-[7.5rem] text-center text-[24px] tabular-nums sm:text-[28px]">
+            {ym.slice(0, 4)}. {+ym.slice(5, 7)}월
+          </h2>
           <MonthLink href={`/calendar?m=${shiftMonth(ym, 1)}`} label="다음 달">
             <path d="m9 18 6-6-6-6" />
           </MonthLink>
