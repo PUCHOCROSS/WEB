@@ -13,9 +13,13 @@ export const revalidate = 300; // 5분마다 새로 만듦 (목록 캐시와 같
 
 export const metadata: Metadata = {
   title: "상시 혜택 – 언제든 받을 수 있는 쿠폰·멤버십 혜택",
-  description:
-    "통신사 멤버십 상시 제휴 할인, 매일 출석체크·룰렛, 신규가입 쿠폰처럼 기간 걱정 없이 언제든 받을 수 있는 혜택을 모았습니다.",
+  description: "통신사 멤버십 제휴 할인, 매일 출석·룰렛, 신규가입 쿠폰처럼 언제든 받을 수 있는 혜택을 모았습니다.", // 80자 이내
   alternates: { canonical: "/always" },
+  openGraph: {
+    title: "상시 혜택 | 오늘의 쿠폰·행사",
+    description: "통신사 멤버십 제휴 할인, 매일 출석·룰렛, 신규가입 쿠폰처럼 언제든 받을 수 있는 혜택을 모았습니다.",
+    url: "/always",
+  },
 };
 
 export default async function AlwaysPage() {

@@ -6,6 +6,11 @@ export const metadata: Metadata = {
   title: "사이트 소개",
   description: `${SITE_NAME}는 흩어져 있는 쿠폰과 할인 행사 소식을 한곳에 모아 소개합니다.`,
   alternates: { canonical: "/about" },
+  openGraph: {
+    title: `사이트 소개 | ${SITE_NAME}`,
+    description: `${SITE_NAME}는 흩어져 있는 쿠폰과 할인 행사 소식을 한곳에 모아 소개합니다.`,
+    url: "/about",
+  },
 };
 
 export default function AboutPage() {

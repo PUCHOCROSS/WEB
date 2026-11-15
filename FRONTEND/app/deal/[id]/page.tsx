@@ -25,8 +25,8 @@ const loadDeal = cache(async (id: string) => (isUuid(id) ? getDeal(id) : null));
 
 const SITE_URL = "https://www.dolmeori.com";
 
-// [SEO] 검색결과에 보일 설명: 이모지·"한눈에 보기" 같은 장식 제거, 150자 이내
-function cleanText(text: string, max = 150) {
+// [SEO] 검색결과에 보일 설명: 이모지·"한눈에 보기" 같은 장식 제거, 80자 이내 (네이버 서치어드바이저 기준)
+function cleanText(text: string, max = 80) {
   const plain = text
     .replace(/[\p{Extended_Pictographic}️]/gu, "")
     .replace(/한눈에\s*보기/g, "")

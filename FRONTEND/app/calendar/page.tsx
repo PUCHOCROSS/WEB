@@ -15,6 +15,11 @@ export const metadata: Metadata = {
   title: "행사 달력",
   description: "쿠폰과 할인 행사를 시작일부터 종료일까지 달력으로 한눈에 확인하세요.",
   alternates: { canonical: "/calendar" },
+  openGraph: {
+    title: "행사 달력 | 오늘의 쿠폰·행사",
+    description: "쿠폰과 할인 행사를 시작일부터 종료일까지 달력으로 한눈에 확인하세요.",
+    url: "/calendar",
+  },
 };
 
 type Props = { searchParams: Promise<{ m?: string; d?: string }> };

@@ -6,6 +6,7 @@ export const metadata: Metadata = {
   title: "개인정보처리방침",
   description: `${SITE_NAME} 개인정보처리방침`,
   alternates: { canonical: "/privacy" },
+  openGraph: { title: `개인정보처리방침 | ${SITE_NAME}`, description: `${SITE_NAME} 개인정보처리방침`, url: "/privacy" },
 };
 
 // 내용을 바꾸면 시행일도 함께 바꿔 주세요.

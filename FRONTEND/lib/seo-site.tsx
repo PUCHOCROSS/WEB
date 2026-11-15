@@ -4,8 +4,9 @@ import type { Metadata } from "next";
 import { SITE_NAME, SITE_URL } from "./site";
 
 const TITLE = "오늘의 쿠폰·행사 – 치킨·카페·편의점·통신사 할인 쿠폰 모음";
+// 설명은 80자 이내 (네이버 서치어드바이저 기준). 고칠 때 글자 수를 꼭 확인하세요.
 const DESCRIPTION =
-  "치킨·버거, 스타벅스 같은 카페, 편의점 1+1, 통신사 멤버십(T Day·KT·유플투쁠), 카드 혜택까지 최신 쿠폰과 할인 행사를 매일 모아 달력으로 정리합니다.";
+  "치킨·카페·편의점 쿠폰부터 통신사 멤버십, 카드 할인까지. 오늘의 쿠폰과 할인 행사를 매일 모아 달력으로 정리합니다.";
 
 export const siteMetadata: Metadata = {
   metadataBase: new URL(SITE_URL),
