@@ -2,12 +2,14 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { DealSummary } from "../lib/categories";
+import { searchDeals } from "../lib/search-index";
 import DealCard from "./DealCard";
 
 export const SEARCH_EVENT = "dm-search";
 
 /** 쿠폰 카드 목록 (+ 선택: 검색창, 카테고리 칩)
  *  - 검색은 화면에 받아 둔 목록 안에서 바로 걸러낸다 (서버 요청 없음).
+ *    제목 · 검색 키워드 · 수집 키워드 · 출처 · 카테고리 + 브랜드 별명 · 초성까지 찾는다 (lib/search-index.ts).
  *  - 주소의 ?q= 로 시작하고, 홈 위쪽 검색창(HomeSearch)이 보내는 검색어도 받는다. */
 export default function DealList({
   deals,
@@ -39,14 +41,8 @@ export default function DealList({
     window.dispatchEvent(new CustomEvent(`${SEARCH_EVENT}-sync`, { detail: v }));
   };
 
-  const filtered = useMemo(() => {
-    const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
-    if (terms.length === 0) return deals;
-    return deals.filter((d) => {
-      const hay = [d.title, d.source, d.query, d.cat.label].join(" ").toLowerCase();
-      return terms.every((t) => hay.includes(t)); // 여러 단어는 모두 포함해야 함 (예: "치킨 할인")
-    });
-  }, [deals, q]);
+  // 여러 단어는 모두 포함해야 함 (예: "치킨 할인"). 제목에서 찾은 글이 위로 온다.
+  const filtered = useMemo(() => searchDeals(deals, q), [deals, q]);
 
   return (
     <div>

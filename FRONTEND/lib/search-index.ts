@@ -102,6 +102,22 @@ const wordCount = new Map<string, number>();
 GROUPS_N.forEach((g) => new Set(g).forEach((w) => wordCount.set(w, (wordCount.get(w) ?? 0) + 1)));
 const isTrigger = (w: string) => w.length >= 2 && wordCount.get(w) === 1;
 
+// 영문으로 시작/끝나는 단어는 다른 영문자에 붙어 있으면 인정하지 않음
+// (예: "kt멤버십" 안의 "t멤버십", "ktx" 안의 "kt" 는 걸리지 않게)
+const LATIN = /[a-z]/;
+function containsWord(text: string, w: string): boolean {
+  const checkStart = LATIN.test(w[0]);
+  const checkEnd = LATIN.test(w[w.length - 1]);
+  for (let i = text.indexOf(w); i !== -1; i = text.indexOf(w, i + 1)) {
+    const before = text[i - 1] ?? "";
+    const after = text[i + w.length] ?? "";
+    if (checkStart && LATIN.test(before)) continue;
+    if (checkEnd && LATIN.test(after)) continue;
+    return true;
+  }
+  return false;
+}
+
 function toText(v: unknown): string {
   if (Array.isArray(v)) return v.join(" ");
   return v == null ? "" : String(v);
@@ -114,7 +130,7 @@ function buildEntry<T extends Record<string, any>>(item: T): Indexed<T> {
   );
   // 글에 등장한 브랜드의 별명·연관어를 붙여 넣기
   const all = title + raw;
-  const extra = GROUPS_N.filter((g) => g.some((w) => isTrigger(w) && all.includes(w)))
+  const extra = GROUPS_N.filter((g) => g.some((w) => isTrigger(w) && containsWord(all, w)))
     .flat()
     .join(" ");
   const body = raw + " " + extra;
