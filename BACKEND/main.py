@@ -10,6 +10,7 @@ from page_dev import PageDev
 from page_history import PageHistory
 from page_categories import PageCategories
 from page_posts import PagePosts
+from page_watch import PageWatch
 from page_publish import PagePublish
 from store import STORE
 
@@ -81,6 +82,7 @@ class MainApp(tk.Tk):
         "Publish": "☁",
         "Posts": "☰",
         "Categories": "◈",
+        "Sites": "⚑",
     }
 
     def __init__(self):
@@ -110,6 +112,7 @@ class MainApp(tk.Tk):
             "Publish": PagePublish,
             "Posts": PagePosts,
             "Categories": PageCategories,
+            "Sites": PageWatch,
         }
 
         self.pages = {}
