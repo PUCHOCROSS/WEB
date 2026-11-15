@@ -7,7 +7,7 @@ const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
 
 /** 홈 오른쪽 작은 달력
  *  - 진행 중인 날마다 점을 찍으면 한 달짜리 행사 하나로 모든 날이 채워져 정보가 없어진다.
- *    그래서 '시작하는 날'(초록)과 '끝나는 날'(빨강)에만 표시한다. 지난 날은 흐리게.
+ *    그래서 '시작하는 날'(초록)과 '끝나는 날'(빨강)에만 그날의 건수를 옅은 알약 숫자로 표시한다. 지난 날은 흐리게.
  *  - 아래에 '다가오는 일정'(시작·마감)을 가까운 순으로 몇 개 보여 준다.
  *  날짜를 누르면 행사 달력의 그날로. */
 export default function MiniCalendar({ events, today }: { events: CalEvent[]; today: string }) {
@@ -75,11 +75,11 @@ export default function MiniCalendar({ events, today }: { events: CalEvent[]; to
         </p>
         <p className="flex items-center gap-2.5 text-[11.5px] text-muted" aria-hidden>
           <span className="flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-brand" />
+            <Count n={2} tone="start" />
             시작
           </span>
           <span className="flex items-center gap-1">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#E5484D]" />
+            <Count n={3} tone="end" />
             마감
           </span>
         </p>
@@ -114,9 +114,9 @@ export default function MiniCalendar({ events, today }: { events: CalEvent[]; to
               >
                 {+d.slice(8, 10)}
               </span>
-              <span aria-hidden className="mt-0.5 flex h-1.5 items-center gap-[3px]">
-                {s > 0 && <span className="h-1.5 w-1.5 rounded-full bg-brand" />}
-                {e > 0 && <span className="h-1.5 w-1.5 rounded-full bg-[#E5484D]" />}
+              <span aria-hidden className="mt-0.5 flex h-[15px] items-center gap-[2px]">
+                {s > 0 && <Count n={s} tone="start" />}
+                {e > 0 && <Count n={e} tone="end" />}
               </span>
             </Link>
           );
@@ -151,6 +151,19 @@ export default function MiniCalendar({ events, today }: { events: CalEvent[]; to
         )}
       </div>
     </section>
+  );
+}
+
+/** 그날 시작(초록) / 마감(빨강) 건수. 옅은 바탕에 진한 숫자(연한 알약). 10건 이상은 9+ */
+function Count({ n, tone }: { n: number; tone: "start" | "end" }) {
+  return (
+    <span
+      className={`flex h-[14px] min-w-[14px] items-center justify-center rounded-[5px] px-[4px] text-[9.5px] font-bold leading-none tabular-nums ${
+        tone === "start" ? "bg-brand-soft text-brand-dark" : "bg-[#FDECEC] text-[#D93636]"
+      }`}
+    >
+      {n > 9 ? "9+" : n}
+    </span>
   );
 }
 
