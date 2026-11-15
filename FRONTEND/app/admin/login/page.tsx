@@ -5,11 +5,11 @@ import LoginForm from "./LoginForm";
 export const dynamic = "force-dynamic";
 
 export default async function AdminLoginPage() {
-  if (await isAdmin()) redirect("/admin/stats");
+  if (await isAdmin()) redirect("/admin");
 
   return (
     <main className="mx-auto flex min-h-screen max-w-sm flex-col justify-center px-6">
-      <h1 className="font-display text-3xl mb-2">통계 보기</h1>
+      <h1 className="font-display text-3xl mb-2">관리자</h1>
       {adminConfigured() ? (
         <>
           <p className="mb-6 text-sm text-muted">관리자 비밀번호를 입력하세요.</p>

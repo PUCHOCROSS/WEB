@@ -24,6 +24,23 @@ export const isBenefit = (v: unknown): v is string => typeof v === "string" && B
 export const benefitOf = (slug: string | null | undefined): Benefit | null =>
   BENEFITS.find((b) => b.slug === slug) ?? null;
 
+// 제목·내용으로 혜택 유형 추천 (위에서부터 먼저 맞는 것). Work Hub publisher.py 의 _BENEFIT_HINTS 와 같은 규칙
+const BENEFIT_HINTS: [string, RegExp][] = [
+  ["roulette", /룰렛|돌림판/],
+  ["firstcome", /선착순|한정\s*수량|오픈런|타임\s*(?:딜|세일)|\d+\s*명\s*한정/],
+  ["draw", /응모|추첨|경품|뽑기|랜덤\s*박스|당첨|래플/],
+  ["coupon", /쿠폰|할인권|장바구니|신규\s*회원|웰컴/],
+  ["event", /페스타|블랙\s*프라이데이|브랜드\s*데이|세일|빅\s*스마일|코리아\s*세일|기획전|위크/],
+  ["event", /최대\s*\d+\s*%|클리어런스|특가|\d+\s*%\s*적립|[12]\s*\+\s*1|증정|사은품/],
+];
+
+/** 혜택 유형 추천. 모르면 '' */
+export function guessBenefit(...texts: (string | null | undefined)[]): string {
+  const text = texts.filter(Boolean).join(" ");
+  for (const [slug, re] of BENEFIT_HINTS) if (re.test(text)) return slug;
+  return "";
+}
+
 export type Badge = { text: string; tone: "urgent" | "normal" | "soon" | "ended" } | null;
 
 /** 카드·상세에 붙는 꼬리표. 기간 꼬리표에 소진 / 상시를 반영한다.

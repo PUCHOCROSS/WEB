@@ -5,7 +5,6 @@
 //                                 + category (""=자동 분류), keywords, always, soldOut, benefit
 //                                 보낸 칸만 바뀜. image / content / 날짜 / keywords / benefit 은 "" 또는 null 로 비움
 //   DELETE /api/deals?id=<uuid>   발행 취소 (토큰 필요)
-import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { authenticate, fail } from "../../../lib/apiAuth";
 import {
@@ -19,19 +18,12 @@ import {
   storageMode,
   updateDeal,
 } from "../../../lib/deals";
+import { refreshPages } from "../../../lib/refresh";
 
 const MAX_BODY = 1_000_000; // 1MB
 
 
-/** 목록이 바뀌었을 때 홈 / 카테고리 / 달력 / 사이트맵을 바로 갱신 */
-function refreshPages(id?: string) {
-  revalidatePath("/");
-  if (id) revalidatePath(`/deal/${id}`);
-  revalidatePath("/category/[slug]", "page");
-  revalidatePath("/calendar");
-  revalidatePath("/always");
-  revalidatePath("/sitemap.xml");
-}
+// 화면 갱신(refreshPages)은 lib/refresh.ts — 관리자 화면에서 발행할 때도 같은 함수를 씁니다.
 
 const storageError = () =>
   storageMode() === "none"

@@ -18,7 +18,7 @@ export async function login(_prev: string | null, form: FormData): Promise<strin
     path: "/",
     maxAge: ADMIN_MAX_AGE,
   });
-  redirect("/admin/stats");
+  redirect("/admin");
 }
 
 export async function logout() {

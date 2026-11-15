@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { isAdmin } from "../../../lib/admin";
 import { getTotalVisits, listDeals, type Deal } from "../../../lib/deals";
 import { getStats, kstDay, kstDaysAgo, type StatsSummary } from "../../../lib/stats";
-import { logout } from "../actions";
+import AdminShell from "../_ui/AdminShell";
 
 export const dynamic = "force-dynamic";
 
@@ -64,15 +64,11 @@ export default async function StatsPage({ searchParams }: Props) {
   const diff = todayVisits - yesterdayVisits;
 
   return (
-    <main className="mx-auto max-w-5xl px-5 py-8 sm:px-8 sm:py-10">
-      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <Link href="/" className="text-sm text-muted hover:text-ink">
-            사이트로 돌아가기
-          </Link>
-          <h1 className="font-display mt-1 text-3xl sm:text-4xl">방문 통계</h1>
-        </div>
-        <div className="flex items-center gap-2">
+    <AdminShell
+      active="stats"
+      title="방문 통계"
+      sub="날짜별 방문자, 들어온 곳, 많이 본 글"
+      actions={
           <nav aria-label="기간" className="flex rounded-full border border-rule bg-paper p-1">
             {RANGES.map((r) => (
               <Link
@@ -87,11 +83,8 @@ export default async function StatsPage({ searchParams }: Props) {
               </Link>
             ))}
           </nav>
-          <form action={logout}>
-            <button className="rounded-full px-3 py-1.5 text-sm text-muted hover:text-ink">로그아웃</button>
-          </form>
-        </div>
-      </header>
+      }
+    >
 
       {error && <p className="mb-6 rounded-xl border border-[#FDBA74] bg-[#FFF7ED] p-4 text-sm text-[#9A3412]">{error}</p>}
 
@@ -201,7 +194,7 @@ export default async function StatsPage({ searchParams }: Props) {
           </ol>
         )}
       </section>
-    </main>
+    </AdminShell>
   );
 }
 
