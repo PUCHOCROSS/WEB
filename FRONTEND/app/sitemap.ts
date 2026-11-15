@@ -1,38 +1,31 @@
+// app/sitemap.ts → /sitemap.xml 자동 생성 (새 행사가 올라오면 자동 반영)
 import type { MetadataRoute } from "next";
-import { withEtc } from "../lib/categories";
-import { getCategories } from "../lib/categoryStore";
-import { listDeals } from "../lib/deals";
-import { SITE_URL } from "../lib/site";
+// 데이터 연결은 lib/seo-data.ts 에서 합니다.
+import { getAllDeals, getAllCategories } from "../lib/seo-data";
 
-// 1시간마다 갱신 (새 글을 발행하면 API 가 바로 갱신함)
-export const revalidate = 3600;
+const SITE_URL = "https://www.dolmeori.com";
+
+export const revalidate = 3600; // 1시간마다 갱신
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const fixed: MetadataRoute.Sitemap = [
-    { url: SITE_URL, lastModified: new Date(), changeFrequency: "daily", priority: 1 },
-    ...withEtc(await getCategories()).map((c) => ({
+  const [deals, categories] = await Promise.all([getAllDeals(), getAllCategories()]);
+  const now = new Date();
+
+  return [
+    { url: `${SITE_URL}/`, lastModified: now, changeFrequency: "hourly", priority: 1 },
+    { url: `${SITE_URL}/calendar`, lastModified: now, changeFrequency: "daily", priority: 0.9 },
+    { url: `${SITE_URL}/about`, changeFrequency: "yearly", priority: 0.3 },
+    ...categories.map((c) => ({
       url: `${SITE_URL}/category/${c.slug}`,
+      lastModified: now,
       changeFrequency: "daily" as const,
       priority: 0.8,
     })),
-    { url: `${SITE_URL}/calendar`, changeFrequency: "daily", priority: 0.9 },
-    { url: `${SITE_URL}/about`, changeFrequency: "yearly", priority: 0.3 },
-    { url: `${SITE_URL}/privacy`, changeFrequency: "yearly", priority: 0.3 },
+    ...deals.map((d) => ({
+      url: `${SITE_URL}/deal/${d.id}`,
+      lastModified: new Date(d.updatedAt),
+      changeFrequency: "weekly" as const,
+      priority: 0.7,
+    })),
   ];
-
-  try {
-    const deals = await listDeals(200);
-    return [
-      ...fixed,
-      ...deals.map((d) => ({
-        url: `${SITE_URL}/deal/${d.id}`,
-        lastModified: d.publishedAt ? new Date(d.publishedAt) : undefined,
-        changeFrequency: "weekly" as const,
-        priority: 0.7,
-      })),
-    ];
-  } catch (e) {
-    console.error("[sitemap] 목록을 불러오지 못했습니다:", e);
-    return fixed;
-  }
 }
