@@ -39,11 +39,14 @@ export const siteMetadata: Metadata = {
   // },
 };
 
+// 검색결과 위쪽에 주소(dolmeori.com) 대신 사이트 이름이 나오게 하는 정보 (Google '사이트 이름')
+// 홈 주소(url)는 canonical 과 같아야 하고, 사이트 이름은 제목·og:site_name 과 같게 맞춥니다.
 const websiteJsonLd = {
   "@context": "https://schema.org",
   "@type": "WebSite",
   name: SITE_NAME,
-  url: SITE_URL,
+  alternateName: ["돌머리", "dolmeori"],
+  url: `${SITE_URL}/`,
   inLanguage: "ko-KR",
 };
 
