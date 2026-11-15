@@ -73,6 +73,7 @@ _BENEFIT_HINTS = [
     ("draw", r"응모|추첨|경품|뽑기|랜덤\s*박스|당첨|래플"),
     ("coupon", r"쿠폰|할인권|장바구니|신규\s*회원|웰컴"),
     ("event", r"페스타|블랙\s*프라이데이|브랜드\s*데이|세일|빅\s*스마일|코리아\s*세일|기획전|위크"),
+    ("event", r"최대\s*\d+\s*%|클리어런스|특가|\d+\s*%\s*적립|[12]\s*\+\s*1|증정|사은품"),   # 할인 행사·프로모션
 ]
 
 
@@ -112,20 +113,30 @@ def to_items(rows, platform_key, query, overrides=None):
     overrides = overrides or {}
     items, seen = [], set()
     for _no, title, source, link, date in rows:
-        link = str(link).strip()
-        ov = overrides.get(link, {})
+        key = str(link).strip()
+        ov = overrides.get(key, {})
         title = " ".join(str(ov.get("title") or title).split())
-        if not title or not link.startswith(("http://", "https://")) or link in seen:
+        # 원문 주소: 편집 창에서 넣은 주소 > 원래 주소. 'manual:…' 이고 주소도 안 넣었으면 '직접 쓴 글'로 발행
+        typed = str(ov.get("link") or "").strip()
+        link = typed if typed.startswith(("http://", "https://")) else key
+        manual = not link.startswith(("http://", "https://"))
+        if not title or (manual and not key.startswith("manual:")) or (not manual and link in seen):
             continue
-        seen.add(link)
+        if not manual:
+            seen.add(link)
         item = {
             "title": title[:300],
-            "source": str(source)[:100],
-            "link": link,
+            # 편집 창에서 원문 주소를 새로 넣었으면 출처는 그 주소의 사이트 (예: www.giordano.co.kr)
+            "source": str(urllib.parse.urlparse(link).netloc if typed.startswith(("http://", "https://"))
+                          else ov.get("source") or source)[:100],
             "platform": platform_key,
             "query": str(query)[:100],
             "collectedAt": _iso(date),
         }
+        if manual:
+            item["manual"] = True       # 홈페이지가 고유값을 만들어 저장 (원문 보기 버튼 없음)
+        else:
+            item["link"] = link
         image = str(ov.get("image") or "").strip()
         if image.startswith(("http://", "https://")):
             item["image"] = image[:600]

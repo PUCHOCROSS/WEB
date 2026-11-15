@@ -30,15 +30,17 @@ THUMB_W, THUMB_H = 220, 130
 AUTO_WORKERS = 5
 
 
-def open_edit_dialog(parent, rows, on_confirm):
+def open_edit_dialog(parent, rows, on_confirm, initial=None):
     """rows: [(no, title, source, link, date), ...]
+       link 가 'manual:…' 이면 원문 주소 없이 직접 쓰는 글 (창에서 원문 주소를 넣을 수 있음)
 
     사용자가 '홈페이지에 발행'을 누르면 on_confirm(rows, overrides) 를 호출합니다.
-    overrides: {link: {"title": str, "image": str}}
+    overrides: {link: {"title", "image", "content", "start", "end", "category", "keywords", "always", "benefit", "link"}}
+    initial: 처음부터 채워 둘 값 (표로 여러 건 등록에서 사용). 형식은 overrides 와 같음.
     """
     if not rows:
         return
-    EditDialog(parent, rows, on_confirm)
+    EditDialog(parent, rows, on_confirm, initial)
 
 
 class EditDialog:
@@ -46,7 +48,7 @@ class EditDialog:
     AUTO_LABEL = "✨ 빈 칸 자동 채우기 (이미지·본문 초안)"
     DRAFT_LABEL = "✍ 본문 초안"
 
-    def __init__(self, parent, rows, on_confirm):
+    def __init__(self, parent, rows, on_confirm, initial=None):
         self.rows = list(rows)
         self.on_confirm = on_confirm
         self.overrides = {}          # link -> {"title":.., "image":..}
@@ -65,7 +67,10 @@ class EditDialog:
             link = str(r[3])
             self.overrides.setdefault(link, {"title": str(r[1]), "image": "", "content": "", "start": "", "end": "",
                                              "category": "", "keywords": "",
-                                             "always": False, "benefit": guess_benefit(r[1])})
+                                             "always": False, "benefit": guess_benefit(r[1]), "link": ""})
+        for link, values in (initial or {}).items():
+            if link in self.overrides:
+                self.overrides[link].update({k: v for k, v in values.items() if v is not None})
 
         self.dlg = T.make_dialog(parent, "발행 전 확인 · 편집", 980, 760)
         self.dlg.resizable(True, True)
@@ -242,11 +247,21 @@ class EditDialog:
 
         link_row = tk.Frame(right, bg=T.BG)
         link_row.pack(fill="x", pady=(10, 0))
+        FlatButton(link_row, "🔗 원문 열기", kind="ghost", command=self._open_link
+                  ).pack(side="right", padx=(8, 0))
         self.lbl_link = tk.Label(link_row, text="", font=T.font(8), fg=T.MUTED, bg=T.BG,
                                  wraplength=380, justify="left", anchor="w")
         self.lbl_link.pack(side="left", fill="x", expand=True)
-        FlatButton(link_row, "🔗 원문 열기", kind="ghost", command=self._open_link
-                  ).pack(side="right", padx=(8, 0))
+        # 직접 쓰는 글(표로 여러 건 등록)은 원문 주소를 여기서 넣는다
+        self.manual_box = tk.Frame(link_row, bg=T.BG)
+        tk.Label(self.manual_box, text="원문 주소 (공식 이벤트 페이지 · 선택)", font=T.font(8, "bold"),
+                 fg=T.MUTED, bg=T.BG, anchor="w").pack(fill="x")
+        self.srclink_var = tk.StringVar()
+        ent_src = tk.Entry(self.manual_box, textvariable=self.srclink_var, font=T.font(9), bg=T.FIELD, fg=T.TEXT,
+                           insertbackground=T.TEXT, relief="flat", highlightthickness=1, highlightbackground=T.BORDER)
+        ent_src.pack(fill="x", ipady=4)
+        ent_src.bind("<FocusOut>", lambda e: self._save_current(render_thumb=False))
+        ent_src.bind("<Return>", lambda e: self._save_current(render_thumb=False))
 
     # ── 목록 ────────────────────────────────────────────────────────────
     def _populate_list(self):
@@ -286,7 +301,14 @@ class EditDialog:
         self.benefit_picker.set_slug(data.get("benefit", ""))
         self.always_var.set(bool(data.get("always")))
         self.excl_var.set(link in self.excluded)
-        self.lbl_link.config(text=link)
+        if link.startswith("manual:"):
+            self.lbl_link.pack_forget()
+            self.manual_box.pack(side="left", fill="x", expand=True)
+            self.srclink_var.set(data.get("link", ""))
+        else:
+            self.manual_box.pack_forget()
+            self.lbl_link.pack(side="left", fill="x", expand=True)
+            self.lbl_link.config(text=link)
         self.content_text.delete("1.0", "end")
         self.content_text.insert("1.0", data.get("content", ""))
         self._render_thumb(data["image"])
@@ -306,6 +328,8 @@ class EditDialog:
         data["keywords"] = self.kw_var.get().strip()
         data["benefit"] = self.benefit_picker.get_slug()
         data["always"] = bool(self.always_var.get())
+        if self._current_link.startswith("manual:"):
+            data["link"] = self.srclink_var.get().strip()
         self._update_tree_row(self._current_idx, data)
         if render_thumb and changed:
             self._render_thumb(new_img)
@@ -332,9 +356,21 @@ class EditDialog:
         self.image_var.set(text)
         self._save_current()
 
+    def _eff_link(self, key):
+        """실제로 열고 가져올 원문 주소: 편집 창에서 넣은 주소 > 원래 주소. 없으면 ''"""
+        typed = str(self.overrides.get(key, {}).get("link") or "")
+        if typed.startswith(("http://", "https://")):
+            return typed
+        return key if key.startswith(("http://", "https://")) else ""
+
     def _open_link(self):
         if self._current_link:
-            webbrowser.open(self._current_link)
+            self._save_current(render_thumb=False)
+            link = self._eff_link(self._current_link)
+            if link:
+                webbrowser.open(link)
+            else:
+                T.toast(self.dlg, "원문 주소가 없습니다. 아래 칸에 공식 이벤트 페이지 주소를 넣어 주세요.", "warn")
 
     def _toggle_excl(self):
         if not self._current_link:
@@ -417,10 +453,11 @@ class EditDialog:
         self._save_current(render_thumb=False)
         def missing(o):
             return not o["image"] or not o.get("content") or not (o.get("start") or o.get("end"))
-        targets = [(str(r[3]), self.overrides[str(r[3])]["title"]) for r in self.rows
+        targets = [(str(r[3]), self.overrides[str(r[3])]["title"], self._eff_link(str(r[3]))) for r in self.rows
                    if missing(self.overrides[str(r[3])])]
+        targets = [t for t in targets if t[2]]          # 원문 주소가 있어야 가져올 수 있음
         if not targets:
-            T.toast(self.dlg, "모든 항목에 이미지, 본문, 기간이 이미 있습니다.", "info")
+            T.toast(self.dlg, "채울 항목이 없습니다. (이미 다 채웠거나, 원문 주소가 없는 항목뿐이에요)", "info")
             return
         self.btn_auto.set("가져오는 중...", enabled=False)
         total = len(targets)
@@ -433,10 +470,10 @@ class EditDialog:
         def worker():
             while True:
                 try:
-                    link, title = work_q.get_nowait()
+                    link, title, url = work_q.get_nowait()
                 except queue.Empty:
                     return
-                self._auto_q.put((link, fetch_draft(link, title)))
+                self._auto_q.put((link, fetch_draft(url, title)))
 
         for _ in range(min(AUTO_WORKERS, total)):
             threading.Thread(target=worker, daemon=True).start()
@@ -516,10 +553,14 @@ class EditDialog:
             return
         self._save_current(render_thumb=False)
         link = self._current_link
+        url = self._eff_link(link)
+        if not url:
+            T.toast(self.dlg, "원문 주소가 있어야 초안을 만들 수 있어요. 아래 칸에 공식 이벤트 페이지 주소를 넣어 주세요.", "warn")
+            return
         title = self.overrides[link]["title"]
         self._draft_busy = True
         self.btn_draft.set("만드는 중...", enabled=False)
-        threading.Thread(target=lambda: self._draft_q.put((link, fetch_draft(link, title))),
+        threading.Thread(target=lambda: self._draft_q.put((link, fetch_draft(url, title))),
                          daemon=True).start()
         self.dlg.after(150, self._poll_draft)
 

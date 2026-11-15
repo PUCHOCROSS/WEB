@@ -92,6 +92,7 @@ class PagePosts(ttk.Frame):
             self, "Posts", "홈페이지에 올라간 글을 확인하고, 내용을 고치거나 삭제합니다.")
         header.pack(fill="x")
         FlatButton(right, "✏ 새 글 쓰기", command=self.new_post, kind="primary").pack(side="right")
+        FlatButton(right, "📋 표로 여러 건 등록", command=self.bulk_import, kind="primary").pack(side="right", padx=(0, 8))
         FlatButton(right, "홈페이지 열기", command=self._open_site, kind="ghost").pack(side="right", padx=(0, 8))
         self.btn_reload = FlatButton(right, "↻ 새로고침", command=self.reload, kind="ghost")
         self.btn_reload.pack(side="right", padx=(0, 8))
@@ -296,6 +297,13 @@ class PagePosts(ttk.Frame):
             T.toast(self, "홈페이지 연결이 설정되지 않았습니다.\nPublish 메뉴에서 사이트 주소와 토큰을 먼저 저장하세요.", "warn")
             return
         PostEditDialog(self, {}, on_saved=lambda _id, _f: self.reload(), new=True)
+
+    def bulk_import(self):
+        if not is_configured():
+            T.toast(self, "홈페이지 연결이 설정되지 않았습니다.\nPublish 메뉴에서 사이트 주소와 토큰을 먼저 저장하세요.", "warn")
+            return
+        from bulk_import import BulkImportDialog
+        BulkImportDialog(self, on_published=self.reload)
 
     def edit_post(self):
         sel = self._selected()
