@@ -63,7 +63,7 @@ class EditDialog:
         for r in self.rows:
             link = str(r[3])
             self.overrides.setdefault(link, {"title": str(r[1]), "image": "", "content": "", "start": "", "end": "",
-                                             "category": ""})
+                                             "category": "", "keywords": ""})
 
         self.dlg = T.make_dialog(parent, "발행 전 확인 · 편집", 980, 760)
         self.dlg.resizable(True, True)
@@ -148,6 +148,18 @@ class EditDialog:
         self.cat_picker.pack(side="left")
         tk.Label(cat_row, text="'자동'은 홈페이지가 제목으로 분류합니다.", font=T.font(8), fg=T.MUTED, bg=T.BG
                  ).pack(side="left", padx=(10, 0))
+
+        tk.Label(right, text="검색 키워드 (선택)", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG
+                 ).pack(anchor="w", pady=(10, 2))
+        self.kw_var = tk.StringVar()
+        ent_kw = tk.Entry(right, textvariable=self.kw_var, font=T.font(10),
+                          bg=T.FIELD, fg=T.TEXT, insertbackground=T.TEXT, relief="flat",
+                          highlightthickness=1, highlightbackground=T.BORDER)
+        ent_kw.pack(fill="x", ipady=4)
+        ent_kw.bind("<KeyRelease>", lambda e: self._save_current(render_thumb=False))
+        tk.Label(right, fg=T.MUTED, bg=T.BG, font=T.font(8), justify="left",
+                 text="쉼표로 구분. 제목에 없는 말로도 홈페이지 검색에 걸려요. 예) 스벅, 커피, 아메리카노"
+                 ).pack(anchor="w", pady=(2, 0))
 
         tk.Label(right, text="대표 이미지 URL", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG
                 ).pack(anchor="w", pady=(12, 2))
@@ -258,6 +270,7 @@ class EditDialog:
         self.start_var.set(data.get("start", ""))
         self.end_var.set(data.get("end", ""))
         self.cat_picker.set_slug(data.get("category", ""))
+        self.kw_var.set(data.get("keywords", ""))
         self.excl_var.set(link in self.excluded)
         self.lbl_link.config(text=link)
         self.content_text.delete("1.0", "end")
@@ -276,6 +289,7 @@ class EditDialog:
         data["start"] = self.start_var.get().strip()
         data["end"] = self.end_var.get().strip()
         data["category"] = self.cat_picker.get_slug()
+        data["keywords"] = self.kw_var.get().strip()
         self._update_tree_row(self._current_idx, data)
         if render_thumb and changed:
             self._render_thumb(new_img)
@@ -473,6 +487,7 @@ class EditDialog:
         self.title_var.set(data["title"])
         self.start_var.set(data.get("start", ""))
         self.end_var.set(data.get("end", ""))
+        self.kw_var.set(data.get("keywords", ""))
         self.content_text.delete("1.0", "end")
         self.content_text.insert("1.0", data.get("content", ""))
         self._render_thumb(data["image"])

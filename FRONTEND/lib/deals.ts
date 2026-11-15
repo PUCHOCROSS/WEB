@@ -25,6 +25,7 @@ export type Deal = {
   startsOn: string | null; // 행사 시작일 'YYYY-MM-DD' (모르면 null)
   endsOn: string | null; // 행사 종료일 'YYYY-MM-DD' (모르면 null)
   category: string | null; // 직접 고른 카테고리 slug. null 이면 제목으로 자동 분류
+  keywords?: string | null; // 검색 키워드 (쉼표로 구분, 사이트 검색용). 없으면 null
 };
 
 /** 원문 링크 없이 직접 쓴 글은 link 가 'manual:<uuid>' (중복 판정용 고유값) */
@@ -55,6 +56,14 @@ function safeUrl(v: unknown): string | null {
   }
 }
 
+/** 검색 키워드: 쉼표·줄바꿈으로 나눠 중복 제거 후 "a, b, c" 로. 비면 null */
+function cleanKeywords(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const words = [...new Set(v.split(/[,\n]/).map((w) => w.replace(/\s+/g, " ").trim()).filter(Boolean))];
+  const joined = words.join(", ").slice(0, 300);
+  return joined || null;
+}
+
 /** 카테고리 slug: '' / null → null(자동), 형식이 틀리면 undefined */
 function cleanSlug(v: unknown): string | null | undefined {
   if (v === null || v === undefined || v === "") return null;
@@ -65,7 +74,7 @@ function cleanSlug(v: unknown): string | null | undefined {
 
 // ── 수정(PATCH) 입력 검증 ─────────────────────────────────────────────────
 /** 고칠 수 있는 칸. 보낸 칸만 바뀌고, 빠진 칸은 그대로 둔다. */
-export type DealPatch = Partial<Pick<Deal, "title" | "image" | "content" | "startsOn" | "endsOn" | "category">>;
+export type DealPatch = Partial<Pick<Deal, "title" | "image" | "content" | "startsOn" | "endsOn" | "category" | "keywords">>;
 
 /** { title?, image?, content?, startsOn?, endsOn? } 검증. 문제가 있으면 { error } */
 export function parsePatch(body: unknown): { patch: DealPatch } | { error: string } {
@@ -88,6 +97,7 @@ export function parsePatch(body: unknown): { patch: DealPatch } | { error: strin
     }
   }
   if (has("content")) patch.content = cleanContent(o.content);
+  if (has("keywords")) patch.keywords = cleanKeywords(o.keywords);
   if (has("category")) {
     const c = cleanSlug(o.category);
     if (c === undefined) return { error: "카테고리 값이 올바르지 않습니다." };
@@ -164,6 +174,7 @@ export function parseItems(body: unknown): ParsedItems | null {
       startsOn,
       endsOn,
       category: cleanSlug(o.category) ?? null,
+      keywords: cleanKeywords(o.keywords),
     });
   }
   return { items, received: raw.length, rejected };
@@ -211,6 +222,7 @@ type Row = {
   starts_on?: string | null; // deal_period.sql 을 실행하기 전에는 없는 칸
   ends_on?: string | null;
   category?: string | null; // manual_posts.sql 을 실행하기 전에는 없는 칸
+  keywords?: string | null; // deal_keywords.sql 을 실행하기 전에는 없는 칸
 };
 
 const rowToDeal = (r: Row): Deal => ({
@@ -228,6 +240,7 @@ const rowToDeal = (r: Row): Deal => ({
   startsOn: r.starts_on ?? null,
   endsOn: r.ends_on ?? null,
   category: r.category ?? null,
+  keywords: r.keywords ?? null,
 });
 
 const supabaseStore: DealStore = (() => {
@@ -269,6 +282,7 @@ const supabaseStore: DealStore = (() => {
         starts_on: i.startsOn,
         ends_on: i.endsOn,
         category: i.category,
+        keywords: i.keywords ?? null,
       }));
       // ignore-duplicates + return=representation → 응답에는 '새로 저장된 행'만 담긴다
       const send = (body: object[]) =>
@@ -283,6 +297,7 @@ const supabaseStore: DealStore = (() => {
       for (const [cols, sql] of [
         [["starts_on", "ends_on"], "deal_period.sql"],
         [["category"], "manual_posts.sql"],
+        [["keywords"], "deal_keywords.sql"],
       ] as const) {
         if (res.ok) break;
         const text = await res.clone().text();
@@ -313,12 +328,16 @@ const supabaseStore: DealStore = (() => {
       if ("startsOn" in patch) cols.starts_on = patch.startsOn;
       if ("endsOn" in patch) cols.ends_on = patch.endsOn;
       if ("category" in patch) cols.category = patch.category;
+      if ("keywords" in patch) cols.keywords = patch.keywords;
       const res = await fetch(`${base()}?id=eq.${id}`, {
         method: "PATCH",
         headers: headers({ Prefer: "return=representation" }),
         body: JSON.stringify(cols),
         cache: "no-store",
       });
+      if (!res.ok && "keywords" in cols && (await res.clone().text()).includes("keywords")) {
+        throw new Error("DB 에 검색 키워드(keywords) 칸이 없습니다. Supabase 에서 supabase/deal_keywords.sql 을 실행하세요.");
+      }
       await check(res, "수정");
       const rows = (await res.json()) as Row[];
       return rows[0] ? rowToDeal(rows[0]) : null;
@@ -395,6 +414,7 @@ const readFile = async (): Promise<Deal[]> => {
       startsOn: d.startsOn ?? null,
       endsOn: d.endsOn ?? null,
       category: d.category ?? null,
+      keywords: d.keywords ?? null,
     }));
   } catch {
     return [];

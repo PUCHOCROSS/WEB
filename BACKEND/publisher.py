@@ -56,6 +56,16 @@ def site_url(base):
     return base[: -len(API_PATH)] if base.rstrip("/").endswith(API_PATH) else base
 
 
+def clean_keywords(text):
+    """검색 키워드: 쉼표·줄바꿈으로 나눠 공백 정리 + 중복 제거 → 'a, b, c' (홈페이지와 같은 규칙)"""
+    out = []
+    for w in re.split(r"[,\n]", str(text or "")):
+        w = " ".join(w.split())
+        if w and w not in out:
+            out.append(w)
+    return ", ".join(out)[:300]
+
+
 def _iso(text):
     """'2026-09-21 14:05' (로컬 시각) -> ISO 8601 (시간대 포함). 실패하면 None"""
     try:
@@ -97,6 +107,10 @@ def to_items(rows, platform_key, query, overrides=None):
         cat = str(ov.get("category") or "").strip()
         if cat:
             item["category"] = cat
+        # 검색 키워드 (선택). 홈페이지 검색에서 제목 말고도 이 단어들로 찾힌다.
+        kw = clean_keywords(ov.get("keywords"))
+        if kw:
+            item["keywords"] = kw
         # 행사 기간 (선택). 'YYYY-MM-DD' 형식만 보낸다.
         for key, field in (("start", "startsOn"), ("end", "endsOn")):
             day = str(ov.get(key) or "").strip()
@@ -215,7 +229,7 @@ def delete_published(base_url, token, deal_ids):
 
 def update_published(base_url, token, deal_id, fields):
     """이미 발행한 글 수정. fields 에 넣은 칸만 바뀐다.
-    fields: {"title", "image", "content", "startsOn", "endsOn"} 중 일부. 비우려면 "" 를 넣는다.
+    fields: {"title", "image", "content", "startsOn", "endsOn", "category", "keywords"} 중 일부. 비우려면 "" 를 넣는다.
     고친 글(dict)을 돌려준다."""
     url = f"{normalize_endpoint(base_url)}?id={urllib.parse.quote(deal_id)}"
     res = _request(url, _check_token(token), fields, method="PATCH")
@@ -230,7 +244,7 @@ def update_period(base_url, token, deal_id, start, end):
 # ── 직접 쓴 글 ────────────────────────────────────────────────────────────
 def publish_manual(base_url, token, fields):
     """직접 쓴 글 1건 발행. 만든 글의 id 를 돌려준다.
-    fields: title(필수), link(선택: 원문 주소), source, image, content, category, startsOn, endsOn"""
+    fields: title(필수), link(선택: 원문 주소), source, image, content, category, keywords, startsOn, endsOn"""
     item = {"manual": True, "platform": "manual", "query": ""}
     item.update({k: v for k, v in fields.items() if v not in (None, "")})
     res = publish(base_url, token, [item])

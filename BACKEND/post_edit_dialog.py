@@ -1,7 +1,7 @@
 """글 쓰기 · 수정 창 (Posts 메뉴 → ✏ 새 글 쓰기 / ✏ 수정)
 
 - 새 글: 수집 없이 직접 써서 발행합니다. 원문 주소는 있으면 넣고, 없으면 비워 두세요.
-- 수정: 제목 / 카테고리 / 대표 이미지 / 본문 / 행사 기간을 고칩니다. 바뀐 칸만 홈페이지로 보냅니다.
+- 수정: 제목 / 카테고리 / 검색 키워드 / 대표 이미지 / 본문 / 행사 기간을 고칩니다. 바뀐 칸만 홈페이지로 보냅니다.
 저장하면 홈 · 카테고리 · 달력 · 상세 페이지에 바로 반영됩니다.
 """
 import io
@@ -16,7 +16,7 @@ import theme as T
 from category_service import CategoryPicker, pick_and_upload
 from date_picker import PeriodInput, parse_day
 from enrich import WRITE_MARK, extract_period, fetch_draft
-from publisher import publish_manual, run_async, site_url, update_published
+from publisher import clean_keywords, publish_manual, run_async, site_url, update_published
 from store import STORE
 from theme import FlatButton
 
@@ -39,6 +39,7 @@ class PostEditDialog:
         link = item.get("link") or ""
         self.link_var = tk.StringVar(value=link if link.startswith("http") else "")
         self.source_var = tk.StringVar(value=item.get("source") or "")
+        self.kw_var = tk.StringVar(value=item.get("keywords") or "")
 
         self.dlg = T.make_dialog(page, "새 글 쓰기" if new else "발행한 글 수정", 880, 780 if new else 740)
         self.dlg.resizable(True, True)
@@ -89,6 +90,11 @@ class PostEditDialog:
         self.cat_picker = CategoryPicker(cat_row, title_fn=lambda: self.title_var.get())
         self.cat_picker.set_slug(self.item.get("category") or "")
         self.cat_picker.pack(side="left")
+
+        self._label(side, "검색 키워드 (선택)", pady=(10, 2))
+        self._entry(side, self.kw_var, 10).pack(fill="x", ipady=4)
+        tk.Label(side, text="쉼표로 구분. 제목에 없는 말로도 홈페이지 검색에 걸려요. 예) 스벅, 커피, 아메리카노",
+                 font=T.font(8), fg=T.MUTED, bg=T.BG, anchor="w").pack(fill="x", pady=(3, 0))
 
         self._label(side, "대표 이미지 주소", pady=(12, 2))
         img_row = tk.Frame(side, bg=T.BG)
@@ -294,8 +300,10 @@ class PostEditDialog:
             "startsOn": self.start_var.get().strip(),
             "endsOn": self.end_var.get().strip(),
             "category": self.cat_picker.get_slug(),
+            "keywords": clean_keywords(self.kw_var.get()),
         }
         old = {k: (self.item.get(k) or "") for k in new}
+        old["keywords"] = clean_keywords(old["keywords"])
         old["title"] = " ".join(str(old["title"]).split())
         old["content"] = str(old["content"]).strip()
         return {k: v for k, v in new.items() if v != old[k]}
@@ -339,7 +347,7 @@ class PostEditDialog:
             self.dlg.destroy()
             self.on_saved(self.item["id"], payload)
             names = {"title": "제목", "image": "이미지", "content": "본문", "startsOn": "기간", "endsOn": "기간",
-                     "category": "카테고리"}
+                     "category": "카테고리", "keywords": "검색 키워드"}
             changed = ", ".join(dict.fromkeys(names[k] for k in fields))
             T.toast(self.page, f"저장했습니다 ({changed}). 홈페이지에 바로 반영됩니다.", "ok")
 
@@ -376,7 +384,8 @@ class PostEditDialog:
             return
 
         fields = {"title": title, "link": link, "source": self.source_var.get().strip(), "image": image,
-                  "content": content, "category": self.cat_picker.get_slug(), "startsOn": start, "endsOn": end}
+                  "content": content, "category": self.cat_picker.get_slug(),
+                  "keywords": clean_keywords(self.kw_var.get()), "startsOn": start, "endsOn": end}
         url, token = STORE.get("publish.url", ""), STORE.get("publish.token", "")
         self.btn_save.set("발행 중...", enabled=False)
         self.lbl_msg.config(text="")
