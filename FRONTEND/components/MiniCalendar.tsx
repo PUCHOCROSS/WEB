@@ -27,9 +27,11 @@ export default function MiniCalendar({ events, today }: { events: CalEvent[]; to
     if (e.endsOn) ends.set(e.endsOn, (ends.get(e.endsOn) ?? 0) + 1);
   }
 
-  // 다가오는 일정: 오늘부터 가까운 날 순 (같은 날이면 마감 먼저).
+  // 다가오는 일정: 오늘부터 가까운 날 순 (같은 날이면 시작 → 하루 → 마감).
   // 같은 날 같은 종류는 한 줄로 묶어 '… 외 N건' — 하루에 몰려도 다음 일정까지 보이게.
-  type Item = { day: string; kind: "start" | "end"; list: CalEvent[] };
+  // 하루만 하는 행사(시작일 = 종료일)는 시작·마감 두 줄 대신 '하루' 한 줄로.
+  type Item = { day: string; kind: "start" | "day" | "end"; list: CalEvent[] };
+  const ORDER = { start: 0, day: 1, end: 2 } as const;
   const groups = new Map<string, Item>();
   for (const e of events) {
     const add = (day: string, kind: Item["kind"]) => {
@@ -38,11 +40,15 @@ export default function MiniCalendar({ events, today }: { events: CalEvent[]; to
       g.list.push(e);
       groups.set(key, g);
     };
+    if (e.startsOn && e.startsOn === e.endsOn) {
+      if (e.startsOn >= today) add(e.startsOn, "day");
+      continue;
+    }
     if (e.endsOn && e.endsOn >= today) add(e.endsOn, "end");
     if (e.startsOn && e.startsOn > today) add(e.startsOn, "start");
   }
   const upcoming = [...groups.values()]
-    .sort((a, b) => a.day.localeCompare(b.day) || (a.kind === "end" ? -1 : 1))
+    .sort((a, b) => a.day.localeCompare(b.day) || ORDER[a.kind] - ORDER[b.kind])
     .slice(0, 4);
 
   const when = (d: string) => {
@@ -134,7 +140,7 @@ export default function MiniCalendar({ events, today }: { events: CalEvent[]; to
                       kind === "end" ? "bg-[#FDECEC] text-[#D93636]" : "bg-brand-soft text-brand-dark"
                     }`}
                   >
-                    {when(day)} {kind === "end" ? "마감" : "시작"}
+                    {when(day)} {kind === "end" ? "마감" : kind === "day" ? "하루" : "시작"}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-ink/85 group-hover:underline">{list[0].title}</span>
                   {list.length > 1 && <span className="shrink-0 text-[12px] font-semibold text-muted">외 {list.length - 1}건</span>}
