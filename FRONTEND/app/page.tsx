@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import CategoryNav from "../components/CategoryNav";
 import DealList from "../components/DealList";
@@ -17,8 +18,12 @@ import { SITE_NAME } from "../lib/site";
 // 아래 값은 그 호출이 누락됐을 때를 대비한 안전장치(초)입니다.
 export const revalidate = 300;
 
-/** 오늘의 추천: 진행 중(마감 가까운 순) → 곧 시작 → 최근 등록 순으로 3개 */
-function pickRecommended(deals: DealSummary[]) {
+export const metadata: Metadata = { alternates: { canonical: "/" } };
+
+/** 오늘의 추천: 진행 중(마감 가까운 순) → 곧 시작 → 최근 등록 순으로 3개
+ *  상시 혜택과 소진된 선착순은 빼고 '지금 챙겨야 하는' 기간 행사만 고른다. */
+function pickRecommended(all: DealSummary[]) {
+  const deals = all.filter((d) => !d.always && !d.soldOut);
   const ongoing = deals
     .filter((d) => d.badge && (d.badge.tone === "urgent" || d.badge.tone === "normal"))
     .sort((a, b) => (a.endsOn ?? "9999").localeCompare(b.endsOn ?? "9999"));
@@ -45,6 +50,7 @@ export default async function Home() {
   const today = kstToday();
   const events = deals.map(toCalEvent).filter((e): e is CalEvent => e !== null);
   const recommended = pickRecommended(deals);
+  const alwaysCount = deals.filter((d) => d.always).length;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -109,6 +115,11 @@ export default async function Home() {
                   <h2 className="font-display text-[24px] sm:text-[28px]">새로 올라온 쿠폰과 행사</h2>
                   <p className="mt-1 text-[14px] text-muted">최근 등록 {deals.length}건, 카드를 누르면 자세히 볼 수 있어요.</p>
                 </div>
+                {alwaysCount > 0 && (
+                  <Link href="/always" className="shrink-0 text-[14px] font-semibold text-brand-dark hover:underline">
+                    상시 혜택 {alwaysCount}건 보기 ›
+                  </Link>
+                )}
               </div>
               <DealList deals={deals} searchBox={false} />
             </section>

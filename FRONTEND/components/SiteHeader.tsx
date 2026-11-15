@@ -13,7 +13,7 @@ function Logo() {
   );
 }
 
-export default function SiteHeader({ active }: { active?: "home" | "calendar" }) {
+export default function SiteHeader({ active }: { active?: "home" | "calendar" | "always" }) {
   const nav = (href: string, label: string, on: boolean) => (
     <Link
       href={href}
@@ -36,6 +36,7 @@ export default function SiteHeader({ active }: { active?: "home" | "calendar" })
           <nav className="flex items-center gap-0.5" aria-label="주 메뉴">
             {nav("/", "홈", active === "home")}
             {nav("/calendar", "행사 달력", active === "calendar")}
+            {nav("/always", "상시 혜택", active === "always")}
           </nav>
           <VisitorCounter />
         </div>

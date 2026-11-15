@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { benefitOf } from "../lib/benefits";
 import type { DealSummary } from "../lib/categories";
 import PeriodBadge, { CalendarGlyph, periodLong } from "./PeriodBadge";
 import Thumb from "./Thumb";
@@ -15,6 +16,7 @@ export default function DealCard({ deal }: { deal: DealSummary }) {
   const cat = deal.cat;
   const period = periodLong(deal.startsOn, deal.endsOn);
   const ended = deal.badge?.tone === "ended";
+  const benefit = benefitOf(deal.benefit);
 
   return (
     <Link
@@ -38,6 +40,11 @@ export default function DealCard({ deal }: { deal: DealSummary }) {
           <span className="truncate text-[12.5px] font-semibold" style={{ color: cat.color }}>
             {cat.label}
           </span>
+          {benefit && (
+            <span className="ml-auto shrink-0 text-[12px] font-semibold text-muted" title={benefit.label}>
+              <span aria-hidden>{benefit.emoji}</span> {benefit.label}
+            </span>
+          )}
         </div>
         <h3 className="line-clamp-2 text-[15.5px] font-bold leading-[1.45] text-ink">{deal.title}</h3>
         <div className="mt-auto pt-2.5 text-[12.5px] text-muted">

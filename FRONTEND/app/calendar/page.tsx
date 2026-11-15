@@ -60,7 +60,7 @@ export default async function CalendarPage({ searchParams }: Props) {
     .map((e) => byId.get(e.id)!)
     .filter(Boolean);
   const upcoming = deals
-    .filter((d) => d.startsOn && d.startsOn > today)
+    .filter((d) => !d.always && d.startsOn && d.startsOn > today)
     .sort((a, b) => a.startsOn!.localeCompare(b.startsOn!))
     .slice(0, 6);
 

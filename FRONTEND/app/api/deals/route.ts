@@ -2,7 +2,8 @@
 //   POST   /api/deals             Python 앱이 수집 결과를 발행 (토큰 필요)
 //   GET    /api/deals?limit=50    목록 조회. 토큰을 붙이면 캐시 없이 최신 목록 (Work Hub 글 관리용)
 //   PATCH  /api/deals?id=<uuid>   글 수정 (토큰 필요)  body: { title?, image?, content?, startsOn?, endsOn? }
-//                                 + category (""=자동 분류). 보낸 칸만 바뀜. image / content / 날짜는 "" 또는 null 로 비움
+//                                 + category (""=자동 분류), keywords, always, soldOut, benefit
+//                                 보낸 칸만 바뀜. image / content / 날짜 / keywords / benefit 은 "" 또는 null 로 비움
 //   DELETE /api/deals?id=<uuid>   발행 취소 (토큰 필요)
 import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
@@ -28,6 +29,7 @@ function refreshPages(id?: string) {
   if (id) revalidatePath(`/deal/${id}`);
   revalidatePath("/category/[slug]", "page");
   revalidatePath("/calendar");
+  revalidatePath("/always");
   revalidatePath("/sitemap.xml");
 }
 
@@ -126,7 +128,9 @@ export async function PATCH(req: Request) {
     const msg = String(e);
     return fail(
       502,
-      /starts_on|ends_on/.test(msg)
+      /deal_keywords\.sql|deal_types\.sql/.test(msg)
+        ? msg.replace(/^Error:\s*/, "") // lib/deals.ts 가 만든 안내 문구 그대로
+        : /starts_on|ends_on/.test(msg)
         ? "DB 에 기간 칸이 없습니다. Supabase 에서 deal_period.sql 을 먼저 실행하세요."
         : /category/.test(msg)
           ? "DB 에 카테고리 칸이 없습니다. Supabase 에서 manual_posts.sql 을 먼저 실행하세요."

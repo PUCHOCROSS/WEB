@@ -1,5 +1,5 @@
 // lib/seo-site.tsx — 사이트 전체 SEO 설정 (layout.tsx 에서 가져다 씀)
-// layout.tsx 는 통째로 바꾸지 말고, 사용법.txt 의 3줄만 고치세요.
+// 검색엔진 소유 확인은 public/ 의 google…html · naver…html 파일로 되어 있어 verification 은 비워 둡니다.
 import type { Metadata } from "next";
 import { SITE_NAME, SITE_URL } from "./site";
 
@@ -15,8 +15,8 @@ export const siteMetadata: Metadata = {
   },
   description: DESCRIPTION,
   keywords: ["쿠폰", "할인 행사", "치킨 쿠폰", "카페 쿠폰", "편의점 1+1", "T멤버십", "KT멤버십", "유플투쁠", "카드 혜택", "행사 달력"],
+  // canonical 은 페이지마다 따로 정합니다 (여기 두면 canonical 이 없는 페이지까지 모두 홈으로 표시됨)
   alternates: {
-    canonical: "/",
     types: { "application/rss+xml": `${SITE_URL}/rss.xml` },
   },
   openGraph: {

@@ -33,7 +33,7 @@ export default async function AlwaysPage() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <SiteHeader />
+      <SiteHeader active="always" />
 
       <main className="mx-auto w-full max-w-6xl flex-grow px-4 pb-16 pt-6 sm:px-6 sm:pt-10">
         <h1 className="text-[26px] font-extrabold tracking-tight sm:text-[32px]">상시 혜택</h1>

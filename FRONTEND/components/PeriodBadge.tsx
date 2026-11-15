@@ -2,10 +2,14 @@ import type { DealSummary } from "../lib/categories";
 
 type Badge = DealSummary["badge"];
 
-/** 상태 알약: 진행중 / 예정 / D-3·오늘 마감 / 종료 */
+/** 상태 알약: 진행중 / 예정 / D-3·오늘 마감 / 종료 + 상시 / 소진 (lib/benefits.ts 의 dealBadge) */
 export default function PeriodBadge({ badge, size = "sm" }: { badge: Badge; size?: "sm" | "md" }) {
   if (!badge) return null;
-  const { text, cls } = {
+  const special: Record<string, { text: string; cls: string }> = {
+    상시: { text: "상시", cls: "bg-[#E8F0FE] text-[#2563EB]" },
+    소진: { text: "소진", cls: "bg-[#EFF1F3] text-muted" },
+  };
+  const { text, cls } = special[badge.text] ?? {
     normal: { text: "진행중", cls: "bg-brand-soft text-brand-dark" },
     urgent: { text: badge.text, cls: "bg-[#FDECEC] text-[#D93636]" },
     soon: { text: "예정", cls: "bg-[#FFF1E3] text-[#D9690B]" },
