@@ -1,7 +1,19 @@
-// app/deal/[id]/page.tsx 에 붙여 넣을 부분
-// 1) generateMetadata  2) JSON-LD  3) 원문 링크 rel 처리
+// 행사 상세 페이지용 SEO 도우미 — page.tsx 에서 가져다 씁니다.
+// 사용법 (기존 app/deal/[id]/page.tsx):
+//
+//   import { buildDealMetadata, DealJsonLd } from "./seo";
+//
+//   export async function generateMetadata({ params }) {
+//     const { id } = await params;
+//     const deal = await (페이지가 이미 쓰는 행사 조회 함수)(id);
+//     return buildDealMetadata(deal);
+//   }
+//
+//   그리고 페이지 본문 JSX 안에  <DealJsonLd deal={deal} />  한 줄 추가
+//
+// deal 객체 필드 이름(title, startDate, endDate, summary, imageUrl, createdAt ...)이
+// 실제 데이터와 다르면 아래에서 이름만 맞춰 주세요.
 import type { Metadata } from "next";
-import { getDeal } from "@/lib/data"; // 실제 함수로 교체
 
 const SITE_URL = "https://www.dolmeori.com";
 
@@ -18,10 +30,9 @@ function cleanDescription(text: string, max = 150) {
 const fmt = (d: string | Date) =>
   new Date(d).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric", timeZone: "Asia/Seoul" });
 
-export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
-  const { id } = await params;
-  const deal = await getDeal(id);
+export function buildDealMetadata(deal: any): Metadata {
   if (!deal) return { title: "행사를 찾을 수 없습니다", robots: { index: false } };
+  const id = deal.id;
 
   // 제목에 기간을 넣으면 "유플투쁠 11월" 같은 검색어에 더 잘 맞습니다
   const title = `${deal.title} (${fmt(deal.startDate)}~${fmt(deal.endDate)})`;

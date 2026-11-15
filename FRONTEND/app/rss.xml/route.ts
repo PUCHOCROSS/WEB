@@ -1,6 +1,6 @@
 // app/rss.xml/route.ts → /rss.xml
 // 네이버 서치어드바이저는 RSS 제출을 권장합니다 (새 글 수집이 빨라짐).
-import { getAllDeals } from "@/lib/data";
+import { getAllDeals } from "../../lib/seo-data";
 
 const SITE_URL = "https://www.dolmeori.com";
 export const revalidate = 3600;
@@ -12,7 +12,7 @@ export async function GET() {
   const deals = (await getAllDeals()).slice(0, 50);
   const items = deals
     .map(
-      (d: any) => `
+      (d) => `
     <item>
       <title>${esc(d.title)}</title>
       <link>${SITE_URL}/deal/${d.id}</link>
