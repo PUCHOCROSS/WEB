@@ -1,19 +1,20 @@
 // lib/seo-site.tsx — 사이트 전체 SEO 설정 (layout.tsx 에서 가져다 씀)
 // layout.tsx 는 통째로 바꾸지 말고, 사용법.txt 의 3줄만 고치세요.
 import type { Metadata } from "next";
+import { SITE_NAME, SITE_URL } from "./site";
 
-const SITE_URL = "https://www.dolmeori.com";
-const SITE_NAME = "오늘의 쿠폰·행사";
+const TITLE = "오늘의 쿠폰·행사 – 치킨·카페·편의점·통신사 할인 쿠폰 모음";
+const DESCRIPTION =
+  "치킨·버거, 스타벅스 같은 카페, 편의점 1+1, 통신사 멤버십(T Day·KT·유플투쁠), 카드 혜택까지 최신 쿠폰과 할인 행사를 매일 모아 달력으로 정리합니다.";
 
 export const siteMetadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "오늘의 쿠폰·행사 – 통신사·카드 멤버십 할인 쿠폰 모음",
+    default: TITLE,
     template: `%s | ${SITE_NAME}`,
   },
-  description:
-    "KT·SKT·LG U+ 멤버십, 카드사 할인 쿠폰과 행사 일정을 매일 모아 달력으로 정리합니다. 시작일·종료일을 한눈에 확인하고 놓치지 마세요.",
-  keywords: ["쿠폰", "할인 행사", "멤버십 혜택", "T멤버십", "KT멤버십", "유플투쁠", "카드 혜택", "행사 달력"],
+  description: DESCRIPTION,
+  keywords: ["쿠폰", "할인 행사", "치킨 쿠폰", "카페 쿠폰", "편의점 1+1", "T멤버십", "KT멤버십", "유플투쁠", "카드 혜택", "행사 달력"],
   alternates: {
     canonical: "/",
     types: { "application/rss+xml": `${SITE_URL}/rss.xml` },
@@ -23,8 +24,8 @@ export const siteMetadata: Metadata = {
     locale: "ko_KR",
     url: SITE_URL,
     siteName: SITE_NAME,
-    title: "오늘의 쿠폰·행사 – 통신사·카드 멤버십 할인 쿠폰 모음",
-    description: "통신사·카드 멤버십 쿠폰과 할인 행사를 달력으로 한눈에.",
+    title: TITLE,
+    description: DESCRIPTION,
   },
   robots: {
     index: true,

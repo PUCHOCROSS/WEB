@@ -1,7 +1,8 @@
 // lib/seo-data.ts — sitemap.xml · rss.xml 이 쓰는 데이터 연결 파일
-// ⚠ 지금은 임시 상태입니다. 빌드는 되지만 행사(deal) 목록이 비어 있어서
-//   사이트맵에는 홈·달력·카테고리 페이지만 들어갑니다.
-//   아래 TODO 두 곳을 기존 행사 목록 조회 코드로 바꾸면 행사 페이지도 자동으로 들어갑니다.
+// 행사 목록은 lib/deals.ts 의 listDeals(), 카테고리는 lib/categoryStore.ts 의 getCategories() 를 그대로 씁니다.
+import { listDeals } from "./deals";
+import { getCategories } from "./categoryStore";
+import { dealPeriod } from "./period";
 
 export type SeoDeal = {
   id: string;
@@ -13,14 +14,37 @@ export type SeoDeal = {
 
 export type SeoCategory = { slug: string };
 
+// 끝난 지 이 기간이 지난 행사는 사이트맵에서 뺍니다.
+// (app/deal/[id]/page.tsx 에서도 같은 기준으로 검색 제외(noindex) 처리)
+const KEEP_ENDED_DAYS = 90;
+
 export async function getAllDeals(): Promise<SeoDeal[]> {
-  // TODO: 홈 화면에서 행사 목록을 불러오는 코드와 같은 걸 여기서 호출하세요.
-  // 예) const rows = await db.deal.findMany({ orderBy: { createdAt: "desc" } });
-  //     return rows;
-  return [];
+  try {
+    const deals = await listDeals(1000);
+    const cutoff = Date.now() - KEEP_ENDED_DAYS * 86_400_000;
+    return deals
+      .filter((d) => {
+        const end = dealPeriod(d).end;
+        return !end || Date.parse(end) >= cutoff;
+      })
+      .map((d) => ({
+        id: d.id,
+        title: d.title,
+        summary: d.content,
+        createdAt: d.publishedAt,
+        updatedAt: d.publishedAt,
+      }));
+  } catch (e) {
+    // 저장소 오류가 나도 사이트맵 자체는 만들어지도록 (홈·달력·카테고리만)
+    console.error("[seo] 행사 목록 불러오기 실패:", e);
+    return [];
+  }
 }
 
 export async function getAllCategories(): Promise<SeoCategory[]> {
-  // TODO: 카테고리가 늘어나면 여기에 추가하거나 DB 조회로 바꾸세요.
-  return [{ slug: "finance" }];
+  try {
+    return (await getCategories()).map((c) => ({ slug: c.slug }));
+  } catch {
+    return [];
+  }
 }
