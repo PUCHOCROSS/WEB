@@ -1,7 +1,7 @@
 """글 쓰기 · 수정 창 (Posts 메뉴 → ✏ 새 글 쓰기 / ✏ 수정)
 
 - 새 글: 수집 없이 직접 써서 발행합니다. 원문 주소는 있으면 넣고, 없으면 비워 두세요.
-- 수정: 제목 / 카테고리 / 검색 키워드 / 대표 이미지 / 본문 / 행사 기간을 고칩니다. 바뀐 칸만 홈페이지로 보냅니다.
+- 수정: 제목 / 카테고리 / 혜택 유형 · 상시 · 소진 / 검색 키워드 / 대표 이미지 / 본문 / 행사 기간을 고칩니다. 바뀐 칸만 홈페이지로 보냅니다.
 저장하면 홈 · 카테고리 · 달력 · 상세 페이지에 바로 반영됩니다.
 """
 import io
@@ -13,10 +13,10 @@ import webbrowser
 from tkinter import messagebox, ttk
 
 import theme as T
-from category_service import CategoryPicker, pick_and_upload
+from category_service import BenefitPicker, CategoryPicker, pick_and_upload
 from date_picker import PeriodInput, parse_day
 from enrich import WRITE_MARK, extract_period, fetch_draft
-from publisher import clean_keywords, publish_manual, run_async, site_url, update_published
+from publisher import clean_keywords, guess_benefit, publish_manual, run_async, site_url, update_published
 from store import STORE
 from theme import FlatButton
 
@@ -40,8 +40,10 @@ class PostEditDialog:
         self.link_var = tk.StringVar(value=link if link.startswith("http") else "")
         self.source_var = tk.StringVar(value=item.get("source") or "")
         self.kw_var = tk.StringVar(value=item.get("keywords") or "")
+        self.always_var = tk.BooleanVar(value=bool(item.get("always")))
+        self.soldout_var = tk.BooleanVar(value=bool(item.get("soldOut")))
 
-        self.dlg = T.make_dialog(page, "새 글 쓰기" if new else "발행한 글 수정", 880, 780 if new else 740)
+        self.dlg = T.make_dialog(page, "새 글 쓰기" if new else "발행한 글 수정", 900, 840 if new else 800)
         self.dlg.resizable(True, True)
         self.dlg.minsize(720, 600)
         self._build()
@@ -80,7 +82,7 @@ class PostEditDialog:
         self._label(side, "제목" + (" (필수)" if self.new else ""))
         ent = self._entry(side, self.title_var, 11)
         ent.pack(fill="x", ipady=5)
-        ent.bind("<KeyRelease>", lambda e: self.cat_picker.refresh())
+        ent.bind("<KeyRelease>", lambda e: (self.cat_picker.refresh(), self._suggest_benefit()))
         if self.new:
             ent.focus_set()
 
@@ -90,6 +92,16 @@ class PostEditDialog:
         self.cat_picker = CategoryPicker(cat_row, title_fn=lambda: self.title_var.get())
         self.cat_picker.set_slug(self.item.get("category") or "")
         self.cat_picker.pack(side="left")
+
+        type_row = tk.Frame(side, bg=T.BG)
+        type_row.pack(fill="x", pady=(10, 0))
+        tk.Label(type_row, text="혜택 유형", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG).pack(side="left", padx=(0, 10))
+        self.benefit_picker = BenefitPicker(type_row)
+        self.benefit_picker.set_slug(self.item.get("benefit") or "")
+        self.benefit_picker.pack(side="left")
+        ttk.Checkbutton(type_row, text="상시 혜택", variable=self.always_var).pack(side="left", padx=(14, 0))
+        if not self.new:
+            ttk.Checkbutton(type_row, text="선착순 소진", variable=self.soldout_var).pack(side="left", padx=(10, 0))
 
         self._label(side, "검색 키워드 (선택)", pady=(10, 2))
         self._entry(side, self.kw_var, 10).pack(fill="x", ipady=4)
@@ -152,6 +164,13 @@ class PostEditDialog:
         sb.pack(side="left", fill="y")
         self.text.insert("1.0", self.item.get("content") or "")
         self.text.edit_reset()
+
+    def _suggest_benefit(self):
+        """새 글: 혜택 유형을 아직 안 골랐으면 제목에서 추천해 채운다"""
+        if self.new and not self.benefit_picker.get_slug():
+            guess = guess_benefit(self.title_var.get())
+            if guess:
+                self.benefit_picker.set_slug(guess)
 
     def _label(self, parent, text, pady=(0, 2)):
         tk.Label(parent, text=text, font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG, anchor="w").pack(fill="x", pady=pady)
@@ -301,9 +320,14 @@ class PostEditDialog:
             "endsOn": self.end_var.get().strip(),
             "category": self.cat_picker.get_slug(),
             "keywords": clean_keywords(self.kw_var.get()),
+            "benefit": self.benefit_picker.get_slug(),
+            "always": bool(self.always_var.get()),
+            "soldOut": bool(self.soldout_var.get()),
         }
         old = {k: (self.item.get(k) or "") for k in new}
         old["keywords"] = clean_keywords(old["keywords"])
+        old["always"] = bool(self.item.get("always"))
+        old["soldOut"] = bool(self.item.get("soldOut"))
         old["title"] = " ".join(str(old["title"]).split())
         old["content"] = str(old["content"]).strip()
         return {k: v for k, v in new.items() if v != old[k]}
@@ -347,7 +371,8 @@ class PostEditDialog:
             self.dlg.destroy()
             self.on_saved(self.item["id"], payload)
             names = {"title": "제목", "image": "이미지", "content": "본문", "startsOn": "기간", "endsOn": "기간",
-                     "category": "카테고리", "keywords": "검색 키워드"}
+                     "category": "카테고리", "keywords": "검색 키워드", "benefit": "혜택 유형",
+                     "always": "상시", "soldOut": "소진"}
             changed = ", ".join(dict.fromkeys(names[k] for k in fields))
             T.toast(self.page, f"저장했습니다 ({changed}). 홈페이지에 바로 반영됩니다.", "ok")
 
@@ -385,7 +410,8 @@ class PostEditDialog:
 
         fields = {"title": title, "link": link, "source": self.source_var.get().strip(), "image": image,
                   "content": content, "category": self.cat_picker.get_slug(),
-                  "keywords": clean_keywords(self.kw_var.get()), "startsOn": start, "endsOn": end}
+                  "keywords": clean_keywords(self.kw_var.get()), "benefit": self.benefit_picker.get_slug(),
+                  "always": bool(self.always_var.get()), "startsOn": start, "endsOn": end}
         url, token = STORE.get("publish.url", ""), STORE.get("publish.token", "")
         self.btn_save.set("발행 중...", enabled=False)
         self.lbl_msg.config(text="")

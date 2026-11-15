@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { DealSummary } from "../lib/categories";
 import { searchDeals } from "../lib/search-index";
+import { BENEFITS } from "../lib/benefits";
 import DealCard from "./DealCard";
 
 export const SEARCH_EVENT = "dm-search";
@@ -15,14 +16,18 @@ export default function DealList({
   deals,
   nav,
   searchBox = true,
+  benefitChips = true,
   emptyText = "아직 등록된 소식이 없습니다. 곧 새로운 쿠폰과 행사로 채워질 예정이에요.",
 }: {
   deals: DealSummary[];
   nav?: ReactNode;
   searchBox?: boolean;
+  /** 혜택 유형 칩 (할인 쿠폰 / 선착순 / 룰렛 ...). 유형이 붙은 글이 있을 때만 보인다 */
+  benefitChips?: boolean;
   emptyText?: string;
 }) {
   const [q, setQ] = useState("");
+  const [benefit, setBenefit] = useState(""); // '' = 전체
 
   useEffect(() => {
     const init = new URLSearchParams(window.location.search).get("q");
@@ -42,7 +47,18 @@ export default function DealList({
   };
 
   // 여러 단어는 모두 포함해야 함 (예: "치킨 할인"). 제목에서 찾은 글이 위로 온다.
-  const filtered = useMemo(() => searchDeals(deals, q), [deals, q]);
+  const searched = useMemo(() => searchDeals(deals, q), [deals, q]);
+  const filtered = useMemo(
+    () => (benefit ? searched.filter((d) => d.benefit === benefit) : searched),
+    [searched, benefit],
+  );
+  // 칩에는 글이 1건 이상 있는 유형만 보여 준다
+  const benefitCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const d of deals) if (d.benefit) counts[d.benefit] = (counts[d.benefit] ?? 0) + 1;
+    return counts;
+  }, [deals]);
+  const shownBenefits = BENEFITS.filter((b) => benefitCounts[b.slug]);
 
   return (
     <div>
@@ -62,6 +78,20 @@ export default function DealList({
       )}
 
       {nav && <div className="mb-6">{nav}</div>}
+
+      {benefitChips && shownBenefits.length > 0 && (
+        <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="혜택 유형">
+          <Chip active={!benefit} onClick={() => setBenefit("")}>
+            전체 혜택
+          </Chip>
+          {shownBenefits.map((b) => (
+            <Chip key={b.slug} active={benefit === b.slug} onClick={() => setBenefit(benefit === b.slug ? "" : b.slug)}>
+              <span aria-hidden>{b.emoji}</span> {b.label}
+              <span className="tabular-nums opacity-70">{benefitCounts[b.slug]}</span>
+            </Chip>
+          ))}
+        </div>
+      )}
 
       {q.trim() && (
         <p className="mb-4 flex items-center gap-3 text-[15px]" aria-live="polite">
@@ -96,6 +126,22 @@ export function SearchGlyph({ className }: { className?: string }) {
       <circle cx="11" cy="11" r="7" />
       <path d="m20 20-3.5-3.5" />
     </svg>
+  );
+}
+
+function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={
+        "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[13.5px] font-semibold transition-colors " +
+        (active ? "bg-brand text-white" : "border border-rule bg-white text-ink/80 hover:border-brand/40")
+      }
+    >
+      {children}
+    </button>
   );
 }
 

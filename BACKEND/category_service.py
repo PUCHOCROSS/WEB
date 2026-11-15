@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 
 import theme as T
-from publisher import fetch_categories, run_async, upload_image
+from publisher import BENEFITS, fetch_categories, run_async, upload_image
 from store import STORE
 
 ETC = {"slug": "etc", "label": "기타", "color": "#64748B", "icon": "etc", "keywords": []}
@@ -159,6 +159,31 @@ class CategoryPicker(ttk.Combobox):
     def set_slug(self, slug):
         self._value = slug or AUTO
         self.refresh()
+
+
+# ── 혜택 유형 콤보박스 ────────────────────────────────────────────────────
+class BenefitPicker(ttk.Combobox):
+    """값: '' = 선택 안 함, 그 밖에는 혜택 유형 slug (coupon / firstcome / event / roulette / draw)"""
+
+    NONE = "선택 안 함"
+
+    def __init__(self, parent, on_change=None, width=16):
+        self.var = tk.StringVar(value=self.NONE)
+        super().__init__(parent, textvariable=self.var, state="readonly", width=width,
+                         values=[self.NONE] + [label for _, label in BENEFITS])
+        self.on_change = on_change or (lambda: None)
+        self.bind("<<ComboboxSelected>>", lambda e: self.on_change())
+
+    def get_slug(self):
+        i = self.current()
+        return BENEFITS[i - 1][0] if i >= 1 else ""
+
+    def set_slug(self, slug):
+        for i, (s, label) in enumerate(BENEFITS):
+            if s == slug:
+                self.var.set(label)
+                return
+        self.var.set(self.NONE)
 
 
 # ── 이미지 올리기 ─────────────────────────────────────────────────────────

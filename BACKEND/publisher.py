@@ -56,6 +56,35 @@ def site_url(base):
     return base[: -len(API_PATH)] if base.rstrip("/").endswith(API_PATH) else base
 
 
+# 혜택 유형 (홈페이지 lib/benefits.ts 의 BENEFITS 와 같은 목록. 한쪽을 고치면 다른 쪽도 맞춰 주세요)
+BENEFITS = [
+    ("coupon", "🏷️ 할인 쿠폰"),
+    ("firstcome", "⏰ 선착순"),
+    ("event", "🎉 행사·페스타"),
+    ("roulette", "🎰 룰렛"),
+    ("draw", "🎁 뽑기·응모"),
+]
+BENEFIT_SLUGS = {s for s, _ in BENEFITS}
+
+# 제목 / 키워드로 혜택 유형 추천 (위에서부터 먼저 맞는 것)
+_BENEFIT_HINTS = [
+    ("roulette", r"룰렛|돌림판"),
+    ("firstcome", r"선착순|한정\s*수량|오픈런|타임\s*(?:딜|세일)|\d+\s*명\s*한정"),
+    ("draw", r"응모|추첨|경품|뽑기|랜덤\s*박스|당첨|래플"),
+    ("coupon", r"쿠폰|할인권|장바구니|신규\s*회원|웰컴"),
+    ("event", r"페스타|블랙\s*프라이데이|브랜드\s*데이|세일|빅\s*스마일|코리아\s*세일|기획전|위크"),
+]
+
+
+def guess_benefit(*texts):
+    """제목 등에서 혜택 유형을 추천한다. 모르면 ''"""
+    text = " ".join(str(t or "") for t in texts)
+    for slug, pattern in _BENEFIT_HINTS:
+        if re.search(pattern, text, re.I):
+            return slug
+    return ""
+
+
 def clean_keywords(text):
     """검색 키워드: 쉼표·줄바꿈으로 나눠 공백 정리 + 중복 제거 → 'a, b, c' (홈페이지와 같은 규칙)"""
     out = []
@@ -111,6 +140,14 @@ def to_items(rows, platform_key, query, overrides=None):
         kw = clean_keywords(ov.get("keywords"))
         if kw:
             item["keywords"] = kw
+        # 혜택 유형 / 상시 / 소진 (선택)
+        benefit = str(ov.get("benefit") or "").strip()
+        if benefit in BENEFIT_SLUGS:
+            item["benefit"] = benefit
+        if ov.get("always"):
+            item["always"] = True
+        if ov.get("soldOut"):
+            item["soldOut"] = True
         # 행사 기간 (선택). 'YYYY-MM-DD' 형식만 보낸다.
         for key, field in (("start", "startsOn"), ("end", "endsOn")):
             day = str(ov.get(key) or "").strip()
@@ -229,7 +266,8 @@ def delete_published(base_url, token, deal_ids):
 
 def update_published(base_url, token, deal_id, fields):
     """이미 발행한 글 수정. fields 에 넣은 칸만 바뀐다.
-    fields: {"title", "image", "content", "startsOn", "endsOn", "category", "keywords"} 중 일부. 비우려면 "" 를 넣는다.
+    fields: {"title", "image", "content", "startsOn", "endsOn", "category", "keywords",
+             "always", "soldOut", "benefit"} 중 일부. 비우려면 "" (상시 / 소진은 True / False) 를 넣는다.
     고친 글(dict)을 돌려준다."""
     url = f"{normalize_endpoint(base_url)}?id={urllib.parse.quote(deal_id)}"
     res = _request(url, _check_token(token), fields, method="PATCH")
@@ -244,7 +282,8 @@ def update_period(base_url, token, deal_id, start, end):
 # ── 직접 쓴 글 ────────────────────────────────────────────────────────────
 def publish_manual(base_url, token, fields):
     """직접 쓴 글 1건 발행. 만든 글의 id 를 돌려준다.
-    fields: title(필수), link(선택: 원문 주소), source, image, content, category, keywords, startsOn, endsOn"""
+    fields: title(필수), link(선택: 원문 주소), source, image, content, category, keywords, startsOn, endsOn,
+            always, benefit"""
     item = {"manual": True, "platform": "manual", "query": ""}
     item.update({k: v for k, v in fields.items() if v not in (None, "")})
     res = publish(base_url, token, [item])

@@ -20,9 +20,10 @@ from tkinter import ttk
 from tkinter import messagebox
 
 import theme as T
-from category_service import CategoryPicker, pick_and_upload
+from category_service import BenefitPicker, CategoryPicker, pick_and_upload
 from date_picker import PeriodInput
 from enrich import WRITE_MARK, extract_period, fetch_draft, valid_day
+from publisher import guess_benefit
 from theme import FlatButton
 
 THUMB_W, THUMB_H = 220, 130
@@ -63,7 +64,8 @@ class EditDialog:
         for r in self.rows:
             link = str(r[3])
             self.overrides.setdefault(link, {"title": str(r[1]), "image": "", "content": "", "start": "", "end": "",
-                                             "category": "", "keywords": ""})
+                                             "category": "", "keywords": "",
+                                             "always": False, "benefit": guess_benefit(r[1])})
 
         self.dlg = T.make_dialog(parent, "발행 전 확인 · 편집", 980, 760)
         self.dlg.resizable(True, True)
@@ -148,6 +150,16 @@ class EditDialog:
         self.cat_picker.pack(side="left")
         tk.Label(cat_row, text="'자동'은 홈페이지가 제목으로 분류합니다.", font=T.font(8), fg=T.MUTED, bg=T.BG
                  ).pack(side="left", padx=(10, 0))
+
+        type_row = tk.Frame(right, bg=T.BG)
+        type_row.pack(fill="x", pady=(10, 0))
+        tk.Label(type_row, text="혜택 유형", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG).pack(side="left", padx=(0, 10))
+        self.benefit_picker = BenefitPicker(type_row, on_change=lambda: self._save_current(render_thumb=False))
+        self.benefit_picker.pack(side="left")
+        self.always_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(type_row, text="상시 혜택 (끝나는 날 없음 · 달력 대신 '상시 혜택' 페이지에)",
+                        variable=self.always_var, command=lambda: self._save_current(render_thumb=False)
+                        ).pack(side="left", padx=(14, 0))
 
         tk.Label(right, text="검색 키워드 (선택)", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG
                  ).pack(anchor="w", pady=(10, 2))
@@ -271,6 +283,8 @@ class EditDialog:
         self.end_var.set(data.get("end", ""))
         self.cat_picker.set_slug(data.get("category", ""))
         self.kw_var.set(data.get("keywords", ""))
+        self.benefit_picker.set_slug(data.get("benefit", ""))
+        self.always_var.set(bool(data.get("always")))
         self.excl_var.set(link in self.excluded)
         self.lbl_link.config(text=link)
         self.content_text.delete("1.0", "end")
@@ -290,6 +304,8 @@ class EditDialog:
         data["end"] = self.end_var.get().strip()
         data["category"] = self.cat_picker.get_slug()
         data["keywords"] = self.kw_var.get().strip()
+        data["benefit"] = self.benefit_picker.get_slug()
+        data["always"] = bool(self.always_var.get())
         self._update_tree_row(self._current_idx, data)
         if render_thumb and changed:
             self._render_thumb(new_img)
@@ -488,6 +504,8 @@ class EditDialog:
         self.start_var.set(data.get("start", ""))
         self.end_var.set(data.get("end", ""))
         self.kw_var.set(data.get("keywords", ""))
+        self.benefit_picker.set_slug(data.get("benefit", ""))
+        self.always_var.set(bool(data.get("always")))
         self.content_text.delete("1.0", "end")
         self.content_text.insert("1.0", data.get("content", ""))
         self._render_thumb(data["image"])
@@ -571,7 +589,7 @@ class EditDialog:
         # 기간: 비어 있으면 본문에서 자동으로 찾고, 형식이 틀린 값은 확인 후 비운다
         bad = []
         for v in overrides.values():
-            if not v.get("start") and not v.get("end"):
+            if not v.get("start") and not v.get("end") and not v.get("always"):   # 상시 혜택은 기간을 찾지 않음
                 v["start"], v["end"] = extract_period(f"{v['title']}\n{v.get('content', '')}")
             for key in ("start", "end"):
                 if v.get(key) and not valid_day(v[key]):

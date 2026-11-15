@@ -2,6 +2,7 @@
 
 - ✏ 수정: 제목 / 대표 이미지 / 본문 / 행사 기간 (한 번에 한 글)
 - 📅 기간 수정: 여러 글을 골라 같은 기간을 한 번에 저장
+- ⛔ 소진 표시: 선착순 쿠폰이 다 나간 글을 골라 '소진'으로 표시 (다시 누르면 해제)
 
 - 목록은 홈페이지 API 에서 캐시 없이 최신 상태로 받아옵니다. (Publish 메뉴의 주소/토큰 사용)
 - 삭제하면 홈 / 카테고리 / 달력에서 바로 사라집니다. 되돌릴 수 없으니 확인 창이 한 번 뜹니다.
@@ -18,11 +19,12 @@ from category_service import auto_category, label_of, load_categories
 from enrich import extract_period
 from post_edit_dialog import PostEditDialog
 from publish_service import is_configured
-from publisher import delete_published, list_published, run_async, site_url, update_period
+from publisher import BENEFITS, delete_published, list_published, run_async, site_url, update_period, update_published
 from store import STORE
 from theme import FlatButton
 
-FILTERS = ("전체", "진행 중", "곧 시작", "종료", "기간 없음")
+FILTERS = ("전체", "진행 중", "곧 시작", "종료", "상시", "소진", "기간 없음")
+BENEFIT_LABEL = dict(BENEFITS)
 
 
 def _local_day(iso):
@@ -34,13 +36,17 @@ def _local_day(iso):
 
 
 def status_of(item, today=None):
-    """(분류, 표시 문구)  분류: ongoing / upcoming / ended / none"""
+    """(분류, 표시 문구)  분류: ongoing / upcoming / ended / soldout / always / none"""
     today = today or dt.date.today()
     s, e = parse_day(item.get("startsOn")), parse_day(item.get("endsOn"))
-    if not s and not e:
-        return "none", "—"
     if e and e < today:
         return "ended", "종료"
+    if item.get("soldOut"):
+        return "soldout", "소진"
+    if item.get("always") and not e:
+        return "always", "상시"
+    if not s and not e:
+        return "none", "—"
     if s and s > today:
         n = (s - today).days
         return "upcoming", "내일 시작" if n == 1 else f"{n}일 뒤 시작"
@@ -110,6 +116,7 @@ class PagePosts(ttk.Frame):
         btns.pack(fill="x", side="bottom", pady=(10, 0))
         FlatButton(btns, "✏ 수정", command=self.edit_post, kind="primary").pack(side="left")
         FlatButton(btns, "📅 기간 수정", command=self.edit_period, kind="ghost").pack(side="left", padx=(8, 0))
+        FlatButton(btns, "⛔ 소진 표시", command=self.toggle_soldout, kind="ghost").pack(side="left", padx=(8, 0))
         FlatButton(btns, "🌐 홈페이지에서 보기", command=self.open_on_site, kind="ghost").pack(side="left", padx=(8, 0))
         FlatButton(btns, "🔗 원문 열기", command=self.open_source, kind="ghost").pack(side="left", padx=(8, 0))
         FlatButton(btns, "🗑 삭제", command=self.delete_selected, kind="danger").pack(side="right")
@@ -117,11 +124,12 @@ class PagePosts(ttk.Frame):
 
         wrap = ttk.Frame(sec, style="Card.TFrame")
         wrap.pack(fill="both", expand=True)
-        cols = ("day", "title", "cat", "period", "status", "views")
+        cols = ("day", "title", "cat", "kind", "period", "status", "views")
         self.tree = ttk.Treeview(wrap, columns=cols, show="headings", selectmode="extended")
         for cid, text, w, anc, stretch in (
                 ("day", "등록일", 96, "center", False), ("title", "제목", 360, "w", True),
-                ("cat", "카테고리", 130, "w", False), ("period", "행사 기간", 120, "center", False),
+                ("cat", "카테고리", 130, "w", False), ("kind", "혜택 유형", 110, "w", False),
+                ("period", "행사 기간", 120, "center", False),
                 ("status", "상태", 90, "center", False), ("views", "조회", 60, "center", False)):
             self.tree.heading(cid, text=text, anchor="w" if anc == "w" else "center")
             self.tree.column(cid, width=w, anchor=anc, stretch=stretch, minwidth=50)
@@ -178,7 +186,8 @@ class PagePosts(ttk.Frame):
     def _filtered(self):
         q = self.search_var.get().strip().lower()
         f = self.filter_var.get()
-        key = {"진행 중": "ongoing", "곧 시작": "upcoming", "종료": "ended", "기간 없음": "none"}.get(f)
+        key = {"진행 중": "ongoing", "곧 시작": "upcoming", "종료": "ended", "상시": "always", "소진": "soldout",
+               "기간 없음": "none"}.get(f)
         out = []
         for it in self.items:
             if q and q not in f"{it.get('title', '')} {it.get('source', '')}".lower():
@@ -196,7 +205,7 @@ class PagePosts(ttk.Frame):
         for i, it in enumerate(rows):
             kind, text = status_of(it)
             tags = ["odd" if i % 2 == 0 else "even"]
-            if kind == "ended":
+            if kind in ("ended", "soldout"):
                 tags.append("ended")
             elif kind == "none":
                 tags.append("none")
@@ -204,6 +213,7 @@ class PagePosts(ttk.Frame):
                 tags.append("urgent")
             self.tree.insert("", "end", iid=it["id"], tags=tags, values=(
                 _local_day(it.get("publishedAt", "")), it.get("title", ""), self._cat_text(it),
+                BENEFIT_LABEL.get(it.get("benefit") or "", "—"),
                 period_label(it) or "—", text, f"{int(it.get('views') or 0):,}"))
         still = [i for i in keep if self.tree.exists(i)]
         if still:
@@ -299,8 +309,43 @@ class PagePosts(ttk.Frame):
     def _apply_edited(self, deal_id, item):
         for it in self.items:
             if it["id"] == deal_id:
-                it.update({k: item.get(k) for k in ("title", "image", "content", "startsOn", "endsOn", "category")})
+                it.update({k: item.get(k) for k in ("title", "image", "content", "startsOn", "endsOn", "category",
+                                                     "keywords", "always", "soldOut", "benefit")})
         self._render()
+
+    def toggle_soldout(self):
+        """선택한 글을 '소진'으로 표시. 이미 모두 소진이면 해제."""
+        sel = self._selected()
+        if not sel:
+            T.toast(self, "소진으로 표시할 글을 선택하세요. (선착순 쿠폰이 다 나간 글)", "warn")
+            return
+        value = not all(it.get("soldOut") for it in sel)
+        url, token = self._conn()
+        ids = [it["id"] for it in sel]
+
+        def work():
+            saved, errors = {}, []
+            for did in ids:
+                try:
+                    item = update_published(url, token, did, {"soldOut": value})
+                    saved[did] = {"soldOut": bool(item.get("soldOut", value))}
+                except Exception as e:  # noqa: BLE001
+                    errors.append(str(e))
+            return saved, errors
+
+        def done(ok, payload):
+            if not ok:
+                T.toast(self, f"저장 실패\n{payload}", "err")
+                return
+            saved, errors = payload
+            self._apply_saved(saved)
+            word = "소진으로 표시했습니다" if value else "소진 표시를 풀었습니다"
+            if errors:
+                T.toast(self, f"{len(saved)}건 {word}. {len(errors)}건 실패\n{errors[0]}", "warn")
+            else:
+                T.toast(self, f"{len(saved)}건을 {word}. 홈페이지에 바로 반영됩니다.", "ok")
+
+        run_async(self, work, done)
 
     def edit_period(self):
         sel = self._selected()

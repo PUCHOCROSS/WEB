@@ -7,6 +7,7 @@
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import { isBenefit } from "./benefits";
 import { isDay } from "./period";
 import { SITE_NAME } from "./site";
 
@@ -26,6 +27,9 @@ export type Deal = {
   endsOn: string | null; // 행사 종료일 'YYYY-MM-DD' (모르면 null)
   category: string | null; // 직접 고른 카테고리 slug. null 이면 제목으로 자동 분류
   keywords?: string | null; // 검색 키워드 (쉼표로 구분, 사이트 검색용). 없으면 null
+  always?: boolean; // 상시 혜택 (끝나는 날이 정해지지 않음) → /always 페이지, 달력 제외
+  soldOut?: boolean; // 선착순 소진 (수동 표시)
+  benefit?: string | null; // 혜택 유형 slug (lib/benefits.ts). 없으면 null
 };
 
 /** 원문 링크 없이 직접 쓴 글은 link 가 'manual:<uuid>' (중복 판정용 고유값) */
@@ -64,6 +68,15 @@ function cleanKeywords(v: unknown): string | null {
   return joined || null;
 }
 
+/** 혜택 유형: '' / null → null, 목록에 없는 값이면 undefined */
+function cleanBenefit(v: unknown): string | null | undefined {
+  if (v === null || v === undefined || v === "") return null;
+  return isBenefit(v) ? v : undefined;
+}
+
+/** 참/거짓: true / "true" / 1 → true, 그 밖에는 false */
+const cleanBool = (v: unknown) => v === true || v === "true" || v === 1;
+
 /** 카테고리 slug: '' / null → null(자동), 형식이 틀리면 undefined */
 function cleanSlug(v: unknown): string | null | undefined {
   if (v === null || v === undefined || v === "") return null;
@@ -74,7 +87,9 @@ function cleanSlug(v: unknown): string | null | undefined {
 
 // ── 수정(PATCH) 입력 검증 ─────────────────────────────────────────────────
 /** 고칠 수 있는 칸. 보낸 칸만 바뀌고, 빠진 칸은 그대로 둔다. */
-export type DealPatch = Partial<Pick<Deal, "title" | "image" | "content" | "startsOn" | "endsOn" | "category" | "keywords">>;
+export type DealPatch = Partial<
+  Pick<Deal, "title" | "image" | "content" | "startsOn" | "endsOn" | "category" | "keywords" | "always" | "soldOut" | "benefit">
+>;
 
 /** { title?, image?, content?, startsOn?, endsOn? } 검증. 문제가 있으면 { error } */
 export function parsePatch(body: unknown): { patch: DealPatch } | { error: string } {
@@ -98,6 +113,13 @@ export function parsePatch(body: unknown): { patch: DealPatch } | { error: strin
   }
   if (has("content")) patch.content = cleanContent(o.content);
   if (has("keywords")) patch.keywords = cleanKeywords(o.keywords);
+  if (has("always")) patch.always = cleanBool(o.always);
+  if (has("soldOut")) patch.soldOut = cleanBool(o.soldOut);
+  if (has("benefit")) {
+    const b = cleanBenefit(o.benefit);
+    if (b === undefined) return { error: "혜택 유형 값이 올바르지 않습니다." };
+    patch.benefit = b;
+  }
   if (has("category")) {
     const c = cleanSlug(o.category);
     if (c === undefined) return { error: "카테고리 값이 올바르지 않습니다." };
@@ -175,6 +197,9 @@ export function parseItems(body: unknown): ParsedItems | null {
       endsOn,
       category: cleanSlug(o.category) ?? null,
       keywords: cleanKeywords(o.keywords),
+      always: cleanBool(o.always),
+      soldOut: cleanBool(o.soldOut),
+      benefit: cleanBenefit(o.benefit) ?? null,
     });
   }
   return { items, received: raw.length, rejected };
@@ -223,6 +248,9 @@ type Row = {
   ends_on?: string | null;
   category?: string | null; // manual_posts.sql 을 실행하기 전에는 없는 칸
   keywords?: string | null; // deal_keywords.sql 을 실행하기 전에는 없는 칸
+  always?: boolean | null; // deal_types.sql 을 실행하기 전에는 없는 칸
+  sold_out?: boolean | null;
+  benefit?: string | null;
 };
 
 const rowToDeal = (r: Row): Deal => ({
@@ -241,6 +269,9 @@ const rowToDeal = (r: Row): Deal => ({
   endsOn: r.ends_on ?? null,
   category: r.category ?? null,
   keywords: r.keywords ?? null,
+  always: Boolean(r.always),
+  soldOut: Boolean(r.sold_out),
+  benefit: r.benefit ?? null,
 });
 
 const supabaseStore: DealStore = (() => {
@@ -283,6 +314,9 @@ const supabaseStore: DealStore = (() => {
         ends_on: i.endsOn,
         category: i.category,
         keywords: i.keywords ?? null,
+        always: Boolean(i.always),
+        sold_out: Boolean(i.soldOut),
+        benefit: i.benefit ?? null,
       }));
       // ignore-duplicates + return=representation → 응답에는 '새로 저장된 행'만 담긴다
       const send = (body: object[]) =>
@@ -298,6 +332,7 @@ const supabaseStore: DealStore = (() => {
         [["starts_on", "ends_on"], "deal_period.sql"],
         [["category"], "manual_posts.sql"],
         [["keywords"], "deal_keywords.sql"],
+        [["always", "sold_out", "benefit"], "deal_types.sql"],
       ] as const) {
         if (res.ok) break;
         const text = await res.clone().text();
@@ -329,14 +364,23 @@ const supabaseStore: DealStore = (() => {
       if ("endsOn" in patch) cols.ends_on = patch.endsOn;
       if ("category" in patch) cols.category = patch.category;
       if ("keywords" in patch) cols.keywords = patch.keywords;
+      if ("always" in patch) cols.always = patch.always;
+      if ("soldOut" in patch) cols.sold_out = patch.soldOut;
+      if ("benefit" in patch) cols.benefit = patch.benefit;
       const res = await fetch(`${base()}?id=eq.${id}`, {
         method: "PATCH",
         headers: headers({ Prefer: "return=representation" }),
         body: JSON.stringify(cols),
         cache: "no-store",
       });
-      if (!res.ok && "keywords" in cols && (await res.clone().text()).includes("keywords")) {
-        throw new Error("DB 에 검색 키워드(keywords) 칸이 없습니다. Supabase 에서 supabase/deal_keywords.sql 을 실행하세요.");
+      if (!res.ok) {
+        const text = await res.clone().text();
+        if ("keywords" in cols && text.includes("keywords")) {
+          throw new Error("DB 에 검색 키워드(keywords) 칸이 없습니다. Supabase 에서 supabase/deal_keywords.sql 을 실행하세요.");
+        }
+        if (["always", "sold_out", "benefit"].some((c) => c in cols && text.includes(c))) {
+          throw new Error("DB 에 상시 / 소진 / 혜택 유형 칸이 없습니다. Supabase 에서 supabase/deal_types.sql 을 실행하세요.");
+        }
       }
       await check(res, "수정");
       const rows = (await res.json()) as Row[];
@@ -415,6 +459,9 @@ const readFile = async (): Promise<Deal[]> => {
       endsOn: d.endsOn ?? null,
       category: d.category ?? null,
       keywords: d.keywords ?? null,
+      always: Boolean(d.always),
+      soldOut: Boolean(d.soldOut),
+      benefit: d.benefit ?? null,
     }));
   } catch {
     return [];

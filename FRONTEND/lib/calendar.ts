@@ -22,6 +22,7 @@ const kstDayOf = (iso: string) => new Intl.DateTimeFormat("en-CA", { timeZone: "
 
 /** 종료일만 있으면 등록일부터, 시작일만 있으면 그날 하루로 그린다 */
 export function toCalEvent(d: DealSummary): CalEvent | null {
+  if (d.always) return null; // 상시 혜택은 달력 대신 /always 페이지에
   if (!d.startsOn && !d.endsOn) return null;
   let start: string, end: string;
   if (d.startsOn && d.endsOn) [start, end] = [d.startsOn, d.endsOn];

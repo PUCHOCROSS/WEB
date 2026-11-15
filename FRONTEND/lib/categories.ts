@@ -9,7 +9,8 @@
 //   - 아무 단어도 없으면 '기타'
 // 이 파일은 브라우저에서도 쓰이므로 서버 전용 코드(파일·DB 접근)는 넣지 않습니다.
 import type { Deal } from "./deals";
-import { dealPeriod, periodBadge } from "./period";
+import { dealBadge } from "./benefits";
+import { dealPeriod } from "./period";
 
 export type Category = {
   slug: string; // 주소에 쓰이는 이름 (/category/food). 영문 소문자·숫자·하이픈
@@ -244,7 +245,7 @@ export function toSummary(d: Deal, cats: Category[]): DealSummary {
     startsOn: p.start,
     endsOn: p.end,
     periodInferred: p.inferred,
-    badge: periodBadge(p),
+    badge: dealBadge(d, p), // 소진 / 상시 반영
     category: c.slug,
     cat: catInfo(c),
     fresh: age >= 0 && age < 86_400_000,
