@@ -124,27 +124,33 @@ def to_items(rows, platform_key, query, overrides=None):
         key = str(link).strip()
         ov = overrides.get(key, {})
         title = " ".join(str(ov.get("title") or title).split())
-        # 원문 주소: 편집 창에서 넣은 주소 > 원래 주소. 'manual:…' 이고 주소도 안 넣었으면 '직접 쓴 글'로 발행
+        # 원문 주소
+        #  - 'manual:…' (직접 쓴 글 · 표로 등록): 고유값은 홈페이지가 만들고, 넣은 주소는 sourceUrl 로
+        #    → 같은 원문 주소로 여러 글을 올려도 된다
+        #  - 수집한 글: 수집 주소(link)로 중복을 막고, 편집 창에서 주소를 바꿨으면 그 주소를 sourceUrl 로
         typed = str(ov.get("link") or "").strip()
-        link = typed if typed.startswith(("http://", "https://")) else key
-        manual = not link.startswith(("http://", "https://"))
-        if not title or (manual and not key.startswith("manual:")) or (not manual and link in seen):
+        typed = typed if typed.startswith(("http://", "https://")) else ""
+        manual = key.startswith("manual:")
+        link = key
+        if not title or (not manual and not link.startswith(("http://", "https://"))) or (not manual and link in seen):
             continue
         if not manual:
             seen.add(link)
         item = {
             "title": title[:300],
             # 편집 창에서 원문 주소를 새로 넣었으면 출처는 그 주소의 사이트 (예: www.giordano.co.kr)
-            "source": str(urllib.parse.urlparse(link).netloc if typed.startswith(("http://", "https://"))
+            "source": str(urllib.parse.urlparse(typed).netloc if typed and manual
                           else ov.get("source") or source)[:100],
             "platform": platform_key,
             "query": str(query)[:100],
             "collectedAt": _iso(date),
         }
         if manual:
-            item["manual"] = True       # 홈페이지가 고유값을 만들어 저장 (원문 보기 버튼 없음)
+            item["manual"] = True       # 홈페이지가 고유값을 만들어 저장
         else:
             item["link"] = link
+        if typed and typed != link:
+            item["sourceUrl"] = typed[:2000]   # 상세 페이지 '원문 보기' 주소
         image = str(ov.get("image") or "").strip()
         if image.startswith(("http://", "https://")):
             item["image"] = image[:600]
@@ -289,7 +295,7 @@ def delete_published(base_url, token, deal_ids):
 def update_published(base_url, token, deal_id, fields):
     """이미 발행한 글 수정. fields 에 넣은 칸만 바뀐다.
     fields: {"title", "image", "content", "startsOn", "endsOn", "category", "keywords",
-             "always", "soldOut", "benefit", "highlight"} 중 일부. 비우려면 "" (상시 / 소진은 True / False) 를 넣는다.
+             "always", "soldOut", "benefit", "highlight", "sourceUrl", "source"} 중 일부. 비우려면 "" (상시 / 소진은 True / False) 를 넣는다.
     고친 글(dict)을 돌려준다."""
     url = f"{normalize_endpoint(base_url)}?id={urllib.parse.quote(deal_id)}"
     res = _request(url, _check_token(token), fields, method="PATCH")
@@ -308,11 +314,13 @@ def publish_manual(base_url, token, fields):
             always, benefit, highlight"""
     item = {"manual": True, "platform": "manual", "query": ""}
     item.update({k: v for k, v in fields.items() if v not in (None, "")})
+    if item.get("link"):                # 원문 주소는 sourceUrl 로 → 같은 주소로 여러 글 가능
+        item["sourceUrl"] = item.pop("link")
     res = publish(base_url, token, [item])
     if res["rejected"]:
         raise PublishError("제목이 비었거나 원문 주소 형식이 올바르지 않습니다.")
     if not res["inserted"]:
-        raise PublishError("같은 원문 주소로 이미 발행한 글이 있습니다. Posts 목록에서 그 글을 수정하세요.")
+        raise PublishError("발행하지 못했습니다. 홈페이지를 최신으로 배포했는지 확인하세요.")
     return (res.get("created") or [{}])[0].get("id", "")
 
 

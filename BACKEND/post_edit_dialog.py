@@ -39,8 +39,9 @@ class PostEditDialog:
         self.image_var = tk.StringVar(value=item.get("image") or "")
         self.start_var = tk.StringVar(value=item.get("startsOn") or "")
         self.end_var = tk.StringVar(value=item.get("endsOn") or "")
-        link = item.get("link") or ""
+        link = item.get("sourceUrl") or item.get("link") or ""      # 보여 줄 원문 주소 (고칠 수 있음)
         self.link_var = tk.StringVar(value=link if link.startswith("http") else "")
+        self._link_before = self.link_var.get()
         self.source_var = tk.StringVar(value=item.get("source") or "")
         self.kw_var = tk.StringVar(value=item.get("keywords") or "")
         self.always_var = tk.BooleanVar(value=bool(item.get("always")))
@@ -140,7 +141,7 @@ class PostEditDialog:
                             "비우면 카테고리 아이콘이 나옵니다.",
                  font=T.font(8), fg=T.MUTED, bg=T.BG, anchor="w").pack(fill="x", pady=(3, 0))
 
-        if self.new:
+        if True:   # 원문 주소 · 출처: 새 글 · 수정 모두 고칠 수 있다
             src = tk.Frame(body, bg=T.BG)
             src.pack(fill="x", pady=(14, 0))
             left = tk.Frame(src, bg=T.BG)
@@ -151,7 +152,7 @@ class PostEditDialog:
             right.pack(side="left", padx=(12, 0))
             self._label(right, "출처 표시 (선택)")
             self._entry(right, self.source_var, 9).pack(fill="x", ipady=5)
-            tk.Label(body, text="원문 주소가 없으면 상세 페이지에 '원문 보기' 버튼이 나오지 않습니다. "
+            tk.Label(body, text="다른 글과 같은 원문 주소여도 됩니다. 비우면 상세 페이지에 '원문 보기' 버튼이 나오지 않아요. "
                                 "출처를 비우면 사이트 이름이 표시됩니다.",
                      font=T.font(8), fg=T.MUTED, bg=T.BG, anchor="w").pack(fill="x", pady=(3, 0))
 
@@ -380,7 +381,7 @@ class PostEditDialog:
         pick_and_upload(self.dlg, done, button=self.btn_upload)
 
     def _open_source(self):
-        link = self.link_var.get().strip() if self.new else str(self.item.get("link", ""))
+        link = self.link_var.get().strip()
         if link.startswith("http"):
             webbrowser.open(link)
 
@@ -411,7 +412,13 @@ class PostEditDialog:
         old["soldOut"] = bool(self.item.get("soldOut"))
         old["title"] = " ".join(str(old["title"]).split())
         old["content"] = str(old["content"]).strip()
-        return {k: v for k, v in new.items() if v != old[k]}
+        out = {k: v for k, v in new.items() if v != old[k]}
+        if self.link_var.get().strip() != self._link_before:          # 원문 주소 바꿈
+            out["sourceUrl"] = self.link_var.get().strip()
+        src = self.source_var.get().strip()
+        if src and src != (self.item.get("source") or ""):
+            out["source"] = src
+        return out
 
     def _save(self):
         if self.new:
@@ -427,6 +434,9 @@ class PostEditDialog:
             return
         if fields.get("image") and not fields["image"].startswith(("http://", "https://")):
             self.lbl_msg.config(text="이미지 주소는 http:// 또는 https:// 로 시작해야 합니다.", fg=T.RED)
+            return
+        if fields.get("sourceUrl") and not fields["sourceUrl"].startswith(("http://", "https://")):
+            self.lbl_msg.config(text="원문 주소는 http:// 또는 https:// 로 시작해야 합니다. (없으면 비워 두세요)", fg=T.RED)
             return
         for k in ("startsOn", "endsOn"):
             if fields.get(k) and not parse_day(fields[k]):
@@ -453,7 +463,8 @@ class PostEditDialog:
             self.on_saved(self.item["id"], payload)
             names = {"title": "제목", "image": "이미지", "content": "본문", "startsOn": "기간", "endsOn": "기간",
                      "category": "카테고리", "keywords": "검색 키워드", "benefit": "혜택 유형",
-                     "always": "상시", "soldOut": "소진", "highlight": "강조 표시"}
+                     "always": "상시", "soldOut": "소진", "highlight": "강조 표시",
+                     "sourceUrl": "원문 주소", "source": "출처"}
             changed = ", ".join(dict.fromkeys(names[k] for k in fields))
             T.toast(self.page, f"저장했습니다 ({changed}). 홈페이지에 바로 반영됩니다.", "ok")
 

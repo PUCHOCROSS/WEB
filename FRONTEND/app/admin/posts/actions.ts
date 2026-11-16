@@ -30,7 +30,7 @@ const NO_STORAGE = "저장소가 설정되지 않았습니다. Vercel 환경변�
 /** DB 오류를 사람이 읽을 문구로 */
 function dbMessage(e: unknown, fallback: string) {
   const msg = String(e).replace(/^Error:\s*/, "");
-  if (/deal_keywords\.sql|deal_types\.sql|deal_highlight\.sql/.test(msg)) return msg;
+  if (/deal_keywords\.sql|deal_types\.sql|deal_highlight\.sql|deal_source_url\.sql/.test(msg)) return msg;
   if (/starts_on|ends_on/.test(msg)) return "DB 에 기간 칸이 없습니다. Supabase 에서 deal_period.sql 을 먼저 실행하세요.";
   if (/category/.test(msg)) return "DB 에 카테고리 칸이 없습니다. Supabase 에서 manual_posts.sql 을 먼저 실행하세요.";
   return fallback;
@@ -64,7 +64,13 @@ export async function savePost(_prev: SaveState, form: FormData): Promise<SaveSt
   let savedId = id;
   if (id) {
     if (!isUuid(id)) return { error: "글 번호가 올바르지 않습니다." };
-    const parsed = parsePatch(fields);
+    // 원문 주소 · 출처는 바뀌었을 때만 보낸다 (DB 칸이 아직 없어도 다른 수정은 되게)
+    const extra: Record<string, string> = {};
+    const sourceUrl = text(form, "sourceUrl");
+    if (sourceUrl !== text(form, "sourceUrlBefore")) extra.sourceUrl = sourceUrl;
+    const source = text(form, "source");
+    if (source && source !== text(form, "sourceBefore")) extra.source = source;
+    const parsed = parsePatch({ ...fields, ...extra });
     if ("error" in parsed) return { error: parsed.error };
     try {
       const deal = await updateDeal(id, parsed.patch);
@@ -74,14 +80,15 @@ export async function savePost(_prev: SaveState, form: FormData): Promise<SaveSt
       return { error: dbMessage(e, "저장하지 못했습니다. 잠시 후 다시 시도해 주세요.") };
     }
   } else {
-    const link = text(form, "link");
-    if (link && !/^https?:\/\//i.test(link)) return { error: "원문 주소는 http:// 또는 https:// 로 시작해야 합니다. (없으면 비워 두세요)" };
+    const sourceUrl = text(form, "sourceUrl");
+    if (sourceUrl && !/^https?:\/\//i.test(sourceUrl)) return { error: "원문 주소는 http:// 또는 https:// 로 시작해야 합니다. (없으면 비워 두세요)" };
     const parsed = parseItems({
       items: [
         {
           ...fields,
-          link: link || undefined,
-          manual: !link, // 원문 주소가 없으면 '직접 쓴 글'
+          // 직접 쓴 글은 고유값을 따로 만들고 원문 주소는 sourceUrl 로 → 같은 원문 주소로 여러 글을 올릴 수 있다
+          manual: true,
+          sourceUrl: sourceUrl || undefined,
           source: text(form, "source"),
           platform: "manual",
           query: "",
@@ -208,8 +215,8 @@ export async function publishBulk(items: BulkItem[]): Promise<BulkResult> {
       const link = /^https?:\/\//i.test(String(it.link ?? "").trim()) ? String(it.link).trim() : "";
       return {
         title: it.title,
-        link: link || undefined,
-        manual: !link,
+        manual: true, // 같은 원문 주소로 여러 글을 올려도 되게
+        sourceUrl: link || undefined,
         source: link ? new URL(link).hostname : it.source,
         content: it.content,
         startsOn: it.start,

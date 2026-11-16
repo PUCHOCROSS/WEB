@@ -272,8 +272,9 @@ class PagePosts(ttk.Frame):
 
     def open_source(self):
         sel = self._selected()
-        if sel and str(sel[0].get("link", "")).startswith("http"):
-            webbrowser.open(sel[0]["link"])
+        url = str(sel[0].get("sourceUrl") or sel[0].get("link") or "") if sel else ""
+        if url.startswith("http"):
+            webbrowser.open(url)
 
     def delete_selected(self):
         sel = self._selected()
@@ -350,7 +351,8 @@ class PagePosts(ttk.Frame):
         for it in self.items:
             if it["id"] == deal_id:
                 it.update({k: item.get(k) for k in ("title", "image", "content", "startsOn", "endsOn", "category",
-                                                     "keywords", "always", "soldOut", "benefit", "highlight")})
+                                                     "keywords", "always", "soldOut", "benefit", "highlight",
+                                                     "sourceUrl", "source")})
         self._render()
 
     def toggle_soldout(self):

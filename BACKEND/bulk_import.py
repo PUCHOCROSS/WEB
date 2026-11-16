@@ -131,7 +131,8 @@ class BulkImportDialog:
                 self.lbl_known.config(text="⚠ 홈페이지 글 목록을 못 받아 중복 확인 없이 진행합니다")
                 return
             self.known_titles = {_norm(it.get("title")) for it in payload}
-            self.known_links = {str(it.get("link") or "") for it in payload if str(it.get("link", "")).startswith("http")}
+            self.known_links = {str(it.get("sourceUrl") or it.get("link") or "") for it in payload
+                                if str(it.get("sourceUrl") or it.get("link") or "").startswith("http")}
             self.known_loaded = True
             self.lbl_known.config(text=f"홈페이지 글 {len(payload)}건과 비교해 중복을 걸러요")
             if self.cands:
@@ -177,7 +178,7 @@ class BulkImportDialog:
         for c in self.cands:
             key = _norm(c["title"])
             note, use = "", True
-            if c["link"] and c["link"] in self.known_links or key in self.known_titles:
+            if key in self.known_titles:
                 note, use = "이미 등록됨", False
             elif key in seen:
                 note, use = "목록 안 중복", False
@@ -187,6 +188,8 @@ class BulkImportDialog:
                 note = "오늘 마감"
             elif not (c["start"] or c["end"] or c["always"]):
                 note = "기간 없음"
+            elif c["link"] and c["link"] in self.known_links:
+                note = "같은 원문 주소 글 있음"     # 같은 주소로 여러 글 가능 → 알려만 준다
             seen.add(key)
             self.use.append(use)
             self.notes.append(note)
@@ -237,13 +240,13 @@ class BulkImportDialog:
         now = time.strftime("%Y-%m-%d %H:%M")
         rows, initial = [], {}
         for i, c in enumerate(picked, start=1):
-            # 원문 주소가 있으면 그 주소로, 없으면 '직접 쓴 글' 표시 (다음 창에서 주소를 넣을 수 있음)
-            key = c["link"] if c["link"].startswith("http") else f"manual:{i}"
+            # 모두 '직접 쓴 글'로 (원문 주소는 다음 창의 원문 주소 칸에 → 같은 주소로 여러 글 가능)
+            key = f"manual:{i}"
             source = urllib.parse.urlparse(c["link"]).netloc if c["link"] else c["brand"]
             rows.append((i, c["title"], source, key, now))
             initial[key] = {"title": c["title"], "content": c["content"], "start": c["start"], "end": c["end"],
                             "benefit": c["benefit"], "keywords": c["keywords"], "always": c["always"],
-                            "source": source}
+                            "source": source, "link": c["link"] if c["link"].startswith("http") else ""}
         page = self.page
         self.dlg.destroy()
         open_edit_dialog(page, rows, lambda r, ov: _publish(page, r, ov, self.on_published), initial=initial)

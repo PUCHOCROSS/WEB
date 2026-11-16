@@ -38,11 +38,12 @@ export default function BulkForm({
       const t = normTitle(c.title);
       let note = "";
       let use = true;
-      if ((c.link && links.has(c.link)) || known.has(t)) [note, use] = ["이미 등록됨", false];
+      if (known.has(t)) [note, use] = ["이미 등록됨", false];
       else if (seen.has(t)) [note, use] = ["목록 안 중복", false];
       else if (c.end && c.end < today) [note, use] = ["이미 종료", false];
       else if (c.end === today) note = "오늘 마감";
       else if (!(c.start || c.end || c.always)) note = "기간 없음";
+      else if (c.link && links.has(c.link)) note = "같은 원문 주소 글 있음"; // 같은 주소로 여러 글 가능 → 알려만 준다
       seen.add(t);
       return { ...c, key, use, note };
     });

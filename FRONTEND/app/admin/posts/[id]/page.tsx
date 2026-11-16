@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { isAdmin } from "../../../../lib/admin";
 import { withEtc } from "../../../../lib/categories";
 import { getCategories } from "../../../../lib/categoryStore";
-import { getDeal, isUuid } from "../../../../lib/deals";
+import { getDeal, isUuid, originalUrl } from "../../../../lib/deals";
 import AdminShell, { ButtonLink } from "../../_ui/AdminShell";
 import { DeleteButton } from "../../_ui/RowActions";
 import PostForm from "../PostForm";
@@ -39,6 +39,7 @@ export default async function EditPost({ params }: Props) {
           id: deal.id,
           title: deal.title,
           link: deal.link,
+          sourceUrl: originalUrl(deal) ?? "",
           source: deal.source,
           image: deal.image ?? "",
           content: deal.content ?? "",

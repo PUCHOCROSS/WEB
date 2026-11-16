@@ -4,7 +4,7 @@ import { isAdmin } from "../../../../lib/admin";
 import { normTitle } from "../../../../lib/bulkParse";
 import { withEtc } from "../../../../lib/categories";
 import { getCategories } from "../../../../lib/categoryStore";
-import { listDeals } from "../../../../lib/deals";
+import { listDeals, originalUrl } from "../../../../lib/deals";
 import { kstToday } from "../../../../lib/period";
 import AdminShell from "../../_ui/AdminShell";
 import BulkForm from "./BulkForm";
@@ -25,7 +25,7 @@ export default async function BulkPage() {
         today={kstToday()}
         categories={cats}
         knownTitles={deals.map((d) => normTitle(d.title))}
-        knownLinks={deals.map((d) => d.link).filter((l) => /^https?:\/\//.test(l))}
+        knownLinks={deals.map((d) => originalUrl(d)).filter((l): l is string => Boolean(l))}
       />
     </AdminShell>
   );

@@ -12,6 +12,7 @@ export type PostFormValues = {
   id?: string;
   title: string;
   link: string;
+  sourceUrl: string; // 보여 줄 원문 주소 (고칠 수 있음)
   source: string;
   image: string;
   content: string;
@@ -188,28 +189,19 @@ export default function PostForm({
           <input name="title" value={title} onChange={(e) => onTitle(e.target.value)} required maxLength={300} className={field} autoFocus={isNew} />
         </Field>
 
-        {isNew ? (
-          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_200px]">
-            <Field label="원문 주소" hint="공식 이벤트 페이지 주소. 없으면 비워 두세요 (상세에 '원문 보기' 버튼이 안 나옴)">
-              <input name="link" type="url" placeholder="https://" defaultValue={initial.link} className={field} />
-            </Field>
-            <Field label="출처 표시" hint="비우면 주소의 사이트 이름">
-              <input name="source" defaultValue={initial.source} placeholder="예) 지오다노" className={field} />
-            </Field>
-          </div>
-        ) : (
-          <p className="rounded-xl bg-ground px-3.5 py-2.5 text-[13px] text-muted">
-            원문 주소{" "}
-            {/^https?:\/\//.test(initial.link) ? (
-              <a href={initial.link} target="_blank" rel="noopener noreferrer" className="break-all text-ink underline underline-offset-2">
-                {initial.link}
-              </a>
-            ) : (
-              <span className="text-ink">없음 (직접 쓴 글)</span>
-            )}{" "}
-            · 출처 {initial.source || "—"} <span className="text-muted">(원문 주소는 고칠 수 없어요)</span>
-          </p>
-        )}
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_200px]">
+          <Field
+            label="원문 주소"
+            hint="공식 이벤트 페이지 주소. 다른 글과 같아도 돼요. 비우면 상세에 '원문 보기' 버튼이 안 나와요."
+          >
+            <input name="sourceUrl" type="url" placeholder="https://" defaultValue={initial.sourceUrl} className={field} />
+          </Field>
+          <Field label="출처 표시" hint={isNew ? "비우면 주소의 사이트 이름" : "목록·상세에 보이는 출처 이름"}>
+            <input name="source" defaultValue={initial.source} placeholder="예) 지오다노" className={field} />
+          </Field>
+        </div>
+        {!isNew && <input type="hidden" name="sourceUrlBefore" value={initial.sourceUrl} />}
+        {!isNew && <input type="hidden" name="sourceBefore" value={initial.source} />}
 
         <div>
           <span className="mb-1.5 block text-[13.5px] font-bold text-ink/85">본문</span>

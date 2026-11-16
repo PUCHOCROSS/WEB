@@ -8,7 +8,7 @@ import SiteFooter from "../../../components/SiteFooter";
 import SiteHeader from "../../../components/SiteHeader";
 import { catInfo, categorize } from "../../../lib/categories";
 import { getCategories } from "../../../lib/categoryStore";
-import { isExternalLink } from "../../../lib/deals";
+import { originalUrl } from "../../../lib/deals";
 import { dealPeriod, periodStatus } from "../../../lib/period";
 import { benefitOf, dealBadge } from "../../../lib/benefits";
 import { highlightOf } from "../../../lib/highlight";
@@ -115,6 +115,7 @@ export default async function DealDetailPage({ params }: Props) {
   const badge = dealBadge(deal, period); // 소진 / 상시 반영
   const benefit = benefitOf(deal.benefit);
   const status = periodStatus(period);
+  const origin = originalUrl(deal);
   const hl = status === "ended" || deal.soldOut ? null : highlightOf(deal.highlight);
   const date = formatDate(deal.collectedAt ?? deal.publishedAt);
 
@@ -141,7 +142,7 @@ export default async function DealDetailPage({ params }: Props) {
       endDate: period.end || period.start,
       eventStatus: "https://schema.org/EventScheduled",
       eventAttendanceMode: "https://schema.org/OnlineEventAttendanceMode",
-      location: { "@type": "VirtualLocation", url: isExternalLink(deal.link) ? deal.link : pageUrl },
+      location: { "@type": "VirtualLocation", url: origin ?? pageUrl },
       image: deal.image ? [deal.image] : undefined,
       url: pageUrl,
     });
@@ -245,10 +246,10 @@ export default async function DealDetailPage({ params }: Props) {
               )}
             </div>
 
-            {isExternalLink(deal.link) && (
+            {origin && (
               <>
             <a
-                  href={deal.link}
+                  href={origin}
                   target="_blank"
                   rel="nofollow noopener noreferrer"
                   className="mt-8 flex w-full items-center justify-center gap-2 rounded-full bg-brand py-4 text-[16px] font-bold text-white transition-colors hover:bg-brand-dark"

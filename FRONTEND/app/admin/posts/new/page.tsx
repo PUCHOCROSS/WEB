@@ -17,7 +17,7 @@ export default async function NewPost() {
       <PostForm
         categories={cats}
         initial={{
-          title: "", link: "", source: "", image: "", content: "", startsOn: "", endsOn: "",
+          title: "", link: "", sourceUrl: "", source: "", image: "", content: "", startsOn: "", endsOn: "",
           category: "", keywords: "", benefit: "", always: false, soldOut: false, highlight: "",
         }}
       />
