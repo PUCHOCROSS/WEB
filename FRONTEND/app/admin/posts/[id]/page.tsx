@@ -34,7 +34,6 @@ export default async function EditPost({ params }: Props) {
       }
     >
       <PostForm
-        hasAi={Boolean(process.env.ANTHROPIC_API_KEY)}
         categories={cats}
         initial={{
           id: deal.id,
