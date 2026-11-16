@@ -20,7 +20,8 @@ from tkinter import ttk
 from tkinter import messagebox
 
 import theme as T
-from category_service import BenefitPicker, CategoryPicker, pick_and_upload
+from capture import capture_and_upload, paste_and_upload
+from category_service import BenefitPicker, CategoryPicker, HighlightPicker, pick_and_upload
 from date_picker import PeriodInput
 from enrich import WRITE_MARK, extract_period, fetch_draft, valid_day
 from publisher import guess_benefit
@@ -35,7 +36,8 @@ def open_edit_dialog(parent, rows, on_confirm, initial=None):
        link 가 'manual:…' 이면 원문 주소 없이 직접 쓰는 글 (창에서 원문 주소를 넣을 수 있음)
 
     사용자가 '홈페이지에 발행'을 누르면 on_confirm(rows, overrides) 를 호출합니다.
-    overrides: {link: {"title", "image", "content", "start", "end", "category", "keywords", "always", "benefit", "link"}}
+    overrides: {link: {"title", "image", "content", "start", "end", "category", "keywords", "always", "benefit",
+                       "highlight", "link"}}
     initial: 처음부터 채워 둘 값 (표로 여러 건 등록에서 사용). 형식은 overrides 와 같음.
     """
     if not rows:
@@ -67,12 +69,13 @@ class EditDialog:
             link = str(r[3])
             self.overrides.setdefault(link, {"title": str(r[1]), "image": "", "content": "", "start": "", "end": "",
                                              "category": "", "keywords": "",
-                                             "always": False, "benefit": guess_benefit(r[1]), "link": ""})
+                                             "always": False, "benefit": guess_benefit(r[1]), "highlight": "",
+                                             "link": ""})
         for link, values in (initial or {}).items():
             if link in self.overrides:
                 self.overrides[link].update({k: v for k, v in values.items() if v is not None})
 
-        self.dlg = T.make_dialog(parent, "발행 전 확인 · 편집", 980, 760)
+        self.dlg = T.make_dialog(parent, "발행 전 확인 · 편집", 1000, 800)
         self.dlg.resizable(True, True)
         self.dlg.minsize(760, 560)
         self._build()
@@ -153,8 +156,9 @@ class EditDialog:
         self.cat_picker = CategoryPicker(cat_row, title_fn=lambda: self.title_var.get(),
                                          on_change=lambda: self._save_current(render_thumb=False))
         self.cat_picker.pack(side="left")
-        tk.Label(cat_row, text="'자동'은 홈페이지가 제목으로 분류합니다.", font=T.font(8), fg=T.MUTED, bg=T.BG
-                 ).pack(side="left", padx=(10, 0))
+        tk.Label(cat_row, text="강조 표시", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG).pack(side="left", padx=(18, 10))
+        self.hl_picker = HighlightPicker(cat_row, on_change=lambda: self._save_current(render_thumb=False))
+        self.hl_picker.pack(side="left")
 
         type_row = tk.Frame(right, bg=T.BG)
         type_row.pack(fill="x", pady=(10, 0))
@@ -195,8 +199,10 @@ class EditDialog:
         FlatButton(img_row, "지우기", kind="ghost", command=self._clear_image).pack(side="left", padx=(4, 0))
         self.btn_upload = FlatButton(img_row, "🖼 내 이미지", kind="ghost", command=self._upload_image)
         self.btn_upload.pack(side="left", padx=(4, 0))
-        tk.Label(right, fg=T.MUTED, bg=T.BG, font=T.font(8), justify="left",
-                text="원문 페이지에서 이미지에 우클릭 → '이미지 주소 복사' 후 붙여넣기를 누르면 됩니다."
+        self.btn_capture = FlatButton(img_row, "✂ 화면 캡처", kind="ghost", command=self._capture_image)
+        self.btn_capture.pack(side="left", padx=(4, 0))
+        tk.Label(right, fg=T.MUTED, bg=T.BG, font=T.font(8), justify="left", wraplength=460,
+                text="✂ 화면 캡처 = 드래그해서 바로 올리기 · 📋 붙여넣기 = Win+Shift+S 캡처나 이미지 주소"
                 ).pack(anchor="w", pady=(2, 0))
 
         if not self._pil_ok:
@@ -300,6 +306,7 @@ class EditDialog:
         self.kw_var.set(data.get("keywords", ""))
         self.benefit_picker.set_slug(data.get("benefit", ""))
         self.always_var.set(bool(data.get("always")))
+        self.hl_picker.set_slug(data.get("highlight", ""))
         self.excl_var.set(link in self.excluded)
         if link.startswith("manual:"):
             self.lbl_link.pack_forget()
@@ -328,6 +335,7 @@ class EditDialog:
         data["keywords"] = self.kw_var.get().strip()
         data["benefit"] = self.benefit_picker.get_slug()
         data["always"] = bool(self.always_var.get())
+        data["highlight"] = self.hl_picker.get_slug()
         if self._current_link.startswith("manual:"):
             data["link"] = self.srclink_var.get().strip()
         self._update_tree_row(self._current_idx, data)
@@ -343,15 +351,37 @@ class EditDialog:
         self.image_var.set("")
         self._save_current()
 
+    def _set_uploaded(self, url):
+        """올린 이미지 주소를 지금 보고 있는 항목에 넣는다"""
+        if not self._alive():
+            return
+        self.image_var.set(url)
+        self._save_current()
+
+    def _capture_image(self):
+        if self._current_link is None:
+            return
+        link = self._current_link
+
+        def done(url):
+            if self._alive() and self._current_link == link:
+                self._set_uploaded(url)
+            elif link in self.overrides:          # 그 사이 다른 항목을 골랐으면 원래 항목에 넣는다
+                self.overrides[link]["image"] = url
+        capture_and_upload(self.dlg, done, button=self.btn_capture)
+
     def _paste_image_url(self):
+        # 클립보드에 캡처한 이미지가 있으면 그걸 올린다
+        if paste_and_upload(self.dlg, self._set_uploaded, button=self.btn_upload):
+            return
         try:
             text = self.dlg.clipboard_get().strip()
         except tk.TclError:
             T.toast(self.dlg, "클립보드가 비어 있습니다.", "warn")
             return
         if not text.startswith(("http://", "https://")):
-            T.toast(self.dlg, "클립보드에 이미지 주소(URL)가 없습니다.\n"
-                              "원문 페이지에서 이미지를 우클릭 → '이미지 주소 복사'를 먼저 해주세요.", "warn")
+            T.toast(self.dlg, "클립보드에 캡처 이미지나 이미지 주소가 없습니다.\n"
+                              "Win+Shift+S 로 캡처하거나, 이미지를 우클릭 → '이미지 주소 복사'를 먼저 해주세요.", "warn")
             return
         self.image_var.set(text)
         self._save_current()

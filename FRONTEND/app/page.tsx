@@ -29,8 +29,12 @@ function pickRecommended(all: DealSummary[]) {
     .sort((a, b) => (a.endsOn ?? "9999").localeCompare(b.endsOn ?? "9999"));
   const soon = deals.filter((d) => d.badge?.tone === "soon").sort((a, b) => (a.startsOn ?? "").localeCompare(b.startsOn ?? ""));
   const rest = deals.filter((d) => !d.badge);
+  // 강조 표시한 글(🔥 중요 → ⭐ 추천)을 먼저. 끝난 글은 강조해도 빼고
+  const live = deals.filter((d) => d.badge?.tone !== "ended");
+  const hot = live.filter((d) => d.highlight === "hot");
+  const pick = live.filter((d) => d.highlight === "pick");
   const out: DealSummary[] = [];
-  for (const d of [...ongoing, ...soon, ...rest]) {
+  for (const d of [...hot, ...pick, ...ongoing, ...soon, ...rest]) {
     if (!out.some((x) => x.id === d.id)) out.push(d);
     if (out.length === 3) break;
   }

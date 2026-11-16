@@ -8,6 +8,7 @@ import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { isBenefit } from "./benefits";
+import { isHighlight } from "./highlight";
 import { isDay } from "./period";
 import { SITE_NAME } from "./site";
 
@@ -30,6 +31,7 @@ export type Deal = {
   always?: boolean; // 상시 혜택 (끝나는 날이 정해지지 않음) → /always 페이지, 달력 제외
   soldOut?: boolean; // 선착순 소진 (수동 표시)
   benefit?: string | null; // 혜택 유형 slug (lib/benefits.ts). 없으면 null
+  highlight?: string | null; // 강조 표시 slug (lib/highlight.ts: hot=중요, pick=추천). 없으면 null
 };
 
 /** 원문 링크 없이 직접 쓴 글은 link 가 'manual:<uuid>' (중복 판정용 고유값) */
@@ -74,6 +76,12 @@ function cleanBenefit(v: unknown): string | null | undefined {
   return isBenefit(v) ? v : undefined;
 }
 
+/** 강조 표시: 비었으면 null, 알 수 없는 값이면 undefined (= 오류) */
+function cleanHighlight(v: unknown): string | null | undefined {
+  if (v === null || v === undefined || v === "" || v === false) return null;
+  return isHighlight(v) ? v : undefined;
+}
+
 /** 참/거짓: true / "true" / 1 → true, 그 밖에는 false */
 const cleanBool = (v: unknown) => v === true || v === "true" || v === 1;
 
@@ -88,7 +96,7 @@ function cleanSlug(v: unknown): string | null | undefined {
 // ── 수정(PATCH) 입력 검증 ─────────────────────────────────────────────────
 /** 고칠 수 있는 칸. 보낸 칸만 바뀌고, 빠진 칸은 그대로 둔다. */
 export type DealPatch = Partial<
-  Pick<Deal, "title" | "image" | "content" | "startsOn" | "endsOn" | "category" | "keywords" | "always" | "soldOut" | "benefit">
+  Pick<Deal, "title" | "image" | "content" | "startsOn" | "endsOn" | "category" | "keywords" | "always" | "soldOut" | "benefit" | "highlight">
 >;
 
 /** { title?, image?, content?, startsOn?, endsOn? } 검증. 문제가 있으면 { error } */
@@ -119,6 +127,11 @@ export function parsePatch(body: unknown): { patch: DealPatch } | { error: strin
     const b = cleanBenefit(o.benefit);
     if (b === undefined) return { error: "혜택 유형 값이 올바르지 않습니다." };
     patch.benefit = b;
+  }
+  if (has("highlight")) {
+    const h = cleanHighlight(o.highlight);
+    if (h === undefined) return { error: "강조 표시 값이 올바르지 않습니다." };
+    patch.highlight = h;
   }
   if (has("category")) {
     const c = cleanSlug(o.category);
@@ -200,6 +213,7 @@ export function parseItems(body: unknown): ParsedItems | null {
       always: cleanBool(o.always),
       soldOut: cleanBool(o.soldOut),
       benefit: cleanBenefit(o.benefit) ?? null,
+      highlight: cleanHighlight(o.highlight) ?? null,
     });
   }
   return { items, received: raw.length, rejected };
@@ -251,6 +265,7 @@ type Row = {
   always?: boolean | null; // deal_types.sql 을 실행하기 전에는 없는 칸
   sold_out?: boolean | null;
   benefit?: string | null;
+  highlight?: string | null; // deal_highlight.sql 을 실행하기 전에는 없는 칸
 };
 
 const rowToDeal = (r: Row): Deal => ({
@@ -272,6 +287,7 @@ const rowToDeal = (r: Row): Deal => ({
   always: Boolean(r.always),
   soldOut: Boolean(r.sold_out),
   benefit: r.benefit ?? null,
+  highlight: r.highlight ?? null,
 });
 
 const supabaseStore: DealStore = (() => {
@@ -317,6 +333,7 @@ const supabaseStore: DealStore = (() => {
         always: Boolean(i.always),
         sold_out: Boolean(i.soldOut),
         benefit: i.benefit ?? null,
+        highlight: i.highlight ?? null,
       }));
       // ignore-duplicates + return=representation → 응답에는 '새로 저장된 행'만 담긴다
       const send = (body: object[]) =>
@@ -333,6 +350,7 @@ const supabaseStore: DealStore = (() => {
         [["category"], "manual_posts.sql"],
         [["keywords"], "deal_keywords.sql"],
         [["always", "sold_out", "benefit"], "deal_types.sql"],
+        [["highlight"], "deal_highlight.sql"],
       ] as const) {
         if (res.ok) break;
         const text = await res.clone().text();
@@ -367,6 +385,7 @@ const supabaseStore: DealStore = (() => {
       if ("always" in patch) cols.always = patch.always;
       if ("soldOut" in patch) cols.sold_out = patch.soldOut;
       if ("benefit" in patch) cols.benefit = patch.benefit;
+      if ("highlight" in patch) cols.highlight = patch.highlight;
       const res = await fetch(`${base()}?id=eq.${id}`, {
         method: "PATCH",
         headers: headers({ Prefer: "return=representation" }),
@@ -380,6 +399,9 @@ const supabaseStore: DealStore = (() => {
         }
         if (["always", "sold_out", "benefit"].some((c) => c in cols && text.includes(c))) {
           throw new Error("DB 에 상시 / 소진 / 혜택 유형 칸이 없습니다. Supabase 에서 supabase/deal_types.sql 을 실행하세요.");
+        }
+        if ("highlight" in cols && text.includes("highlight")) {
+          throw new Error("DB 에 강조 표시(highlight) 칸이 없습니다. Supabase 에서 supabase/deal_highlight.sql 을 실행하세요.");
         }
       }
       await check(res, "수정");
@@ -462,6 +484,7 @@ const readFile = async (): Promise<Deal[]> => {
       always: Boolean(d.always),
       soldOut: Boolean(d.soldOut),
       benefit: d.benefit ?? null,
+      highlight: d.highlight ?? null,
     }));
   } catch {
     return [];

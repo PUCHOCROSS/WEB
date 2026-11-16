@@ -10,7 +10,7 @@ import tkinter as tk
 from tkinter import filedialog, ttk
 
 import theme as T
-from publisher import BENEFITS, fetch_categories, run_async, upload_image
+from publisher import BENEFITS, HIGHLIGHTS, fetch_categories, run_async, upload_image
 from store import STORE
 
 ETC = {"slug": "etc", "label": "기타", "color": "#64748B", "icon": "etc", "keywords": []}
@@ -180,6 +180,30 @@ class BenefitPicker(ttk.Combobox):
 
     def set_slug(self, slug):
         for i, (s, label) in enumerate(BENEFITS):
+            if s == slug:
+                self.var.set(label)
+                return
+        self.var.set(self.NONE)
+
+
+class HighlightPicker(ttk.Combobox):
+    """강조 표시. 값: '' = 없음, 'hot' = 🔥 중요(빨간 테두리), 'pick' = ⭐ 추천(초록 테두리)"""
+
+    NONE = "없음"
+
+    def __init__(self, parent, on_change=None, width=20):
+        self.var = tk.StringVar(value=self.NONE)
+        super().__init__(parent, textvariable=self.var, state="readonly", width=width,
+                         values=[self.NONE] + [label for _, label in HIGHLIGHTS])
+        self.on_change = on_change or (lambda: None)
+        self.bind("<<ComboboxSelected>>", lambda e: self.on_change())
+
+    def get_slug(self):
+        i = self.current()
+        return HIGHLIGHTS[i - 1][0] if i >= 1 else ""
+
+    def set_slug(self, slug):
+        for s, label in HIGHLIGHTS:
             if s == slug:
                 self.var.set(label)
                 return

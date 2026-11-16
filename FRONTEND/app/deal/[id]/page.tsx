@@ -11,6 +11,7 @@ import { getCategories } from "../../../lib/categoryStore";
 import { isExternalLink } from "../../../lib/deals";
 import { dealPeriod, periodStatus } from "../../../lib/period";
 import { benefitOf, dealBadge } from "../../../lib/benefits";
+import { highlightOf } from "../../../lib/highlight";
 import PeriodBadge, { periodLong } from "../../../components/PeriodBadge";
 import CategoryIcon from "../../../components/CategoryIcon";
 import Thumb from "../../../components/Thumb";
@@ -112,6 +113,7 @@ export default async function DealDetailPage({ params }: Props) {
   const badge = dealBadge(deal, period); // 소진 / 상시 반영
   const benefit = benefitOf(deal.benefit);
   const status = periodStatus(period);
+  const hl = status === "ended" || deal.soldOut ? null : highlightOf(deal.highlight);
   const date = formatDate(deal.collectedAt ?? deal.publishedAt);
 
   // [SEO] 구조화 데이터: 검색엔진이 "행사 기간·이미지·카테고리 경로"를 정확히 읽게 함
@@ -160,6 +162,12 @@ export default async function DealDetailPage({ params }: Props) {
 
           <div className="px-5 pb-6 pt-5 sm:px-8 sm:pb-8 sm:pt-7">
             <div className="mb-3 flex flex-wrap items-center gap-2">
+              {hl && (
+                <span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[13px] font-bold ${hl.tag}`}>
+                  <span aria-hidden>{hl.emoji}</span>
+                  {hl.label}
+                </span>
+              )}
               <PeriodBadge badge={badge} size="md" />
               <Link
                 href={`/category/${cat.slug}`}

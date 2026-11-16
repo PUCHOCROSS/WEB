@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { benefitOf } from "../lib/benefits";
+import { highlightOf } from "../lib/highlight";
 import type { DealSummary } from "../lib/categories";
 import PeriodBadge, { CalendarGlyph, periodLong } from "./PeriodBadge";
 import Thumb from "./Thumb";
@@ -17,19 +18,28 @@ export default function DealCard({ deal }: { deal: DealSummary }) {
   const period = periodLong(deal.startsOn, deal.endsOn);
   const ended = deal.badge?.tone === "ended";
   const benefit = benefitOf(deal.benefit);
+  // 강조 표시는 진행 중인 글에만 (끝났거나 소진되면 평소 모습)
+  const hl = ended || deal.soldOut ? null : highlightOf(deal.highlight);
 
   return (
     <Link
       href={`/deal/${deal.id}`}
       className={`card group flex flex-col overflow-hidden p-2.5 transition-[transform,box-shadow] duration-200 hover:-translate-y-0.5 hover:shadow-lg ${
         ended ? "opacity-60 hover:opacity-100" : ""
-      }`}
+      } ${hl ? hl.card : ""}`}
     >
       <div className="relative aspect-[16/10] overflow-hidden rounded-[14px] bg-ground">
         <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.icon} />
         {deal.fresh && (
           <span className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-0.5 text-[11.5px] font-bold text-brand-dark shadow-sm">
             NEW
+          </span>
+        )}
+        {hl && (
+          <span
+            className={`absolute right-2 top-2 rounded-full px-2.5 py-0.5 text-[11.5px] font-bold shadow-sm ${hl.tag}`}
+          >
+            <span aria-hidden>{hl.emoji}</span> {hl.label}
           </span>
         )}
       </div>

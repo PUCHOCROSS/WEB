@@ -17,7 +17,7 @@ export default async function NewPost() {
         categories={cats}
         initial={{
           title: "", link: "", source: "", image: "", content: "", startsOn: "", endsOn: "",
-          category: "", keywords: "", benefit: "", always: false, soldOut: false,
+          category: "", keywords: "", benefit: "", always: false, soldOut: false, highlight: "",
         }}
       />
     </AdminShell>

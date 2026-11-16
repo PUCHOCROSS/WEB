@@ -28,7 +28,7 @@ const NO_STORAGE = "저장소가 설정되지 않았습니다. Vercel 환경변�
 /** DB 오류를 사람이 읽을 문구로 */
 function dbMessage(e: unknown, fallback: string) {
   const msg = String(e).replace(/^Error:\s*/, "");
-  if (/deal_keywords\.sql|deal_types\.sql/.test(msg)) return msg;
+  if (/deal_keywords\.sql|deal_types\.sql|deal_highlight\.sql/.test(msg)) return msg;
   if (/starts_on|ends_on/.test(msg)) return "DB 에 기간 칸이 없습니다. Supabase 에서 deal_period.sql 을 먼저 실행하세요.";
   if (/category/.test(msg)) return "DB 에 카테고리 칸이 없습니다. Supabase 에서 manual_posts.sql 을 먼저 실행하세요.";
   return fallback;
@@ -55,6 +55,7 @@ export async function savePost(_prev: SaveState, form: FormData): Promise<SaveSt
     benefit: text(form, "benefit"),
     always: form.get("always") === "on",
     soldOut: form.get("soldOut") === "on",
+    highlight: text(form, "highlight"),
   };
   if (!fields.title) return { error: "제목을 입력해 주세요." };
 

@@ -66,6 +66,14 @@ BENEFITS = [
 ]
 BENEFIT_SLUGS = {s for s, _ in BENEFITS}
 
+# 강조 표시 (홈페이지 lib/highlight.ts 의 HIGHLIGHTS 와 같은 목록)
+#   hot  = 🔥 중요 → 빨간 테두리,  pick = ⭐ 추천 → 초록 테두리. 홈 '오늘의 추천'에 먼저 올라간다.
+HIGHLIGHTS = [
+    ("hot", "🔥 중요 (빨간 테두리)"),
+    ("pick", "⭐ 추천 (초록 테두리)"),
+]
+HIGHLIGHT_SLUGS = {s for s, _ in HIGHLIGHTS}
+
 # 제목 / 키워드로 혜택 유형 추천 (위에서부터 먼저 맞는 것)
 _BENEFIT_HINTS = [
     ("roulette", r"룰렛|돌림판"),
@@ -159,6 +167,9 @@ def to_items(rows, platform_key, query, overrides=None):
             item["always"] = True
         if ov.get("soldOut"):
             item["soldOut"] = True
+        hl = str(ov.get("highlight") or "").strip()
+        if hl in HIGHLIGHT_SLUGS:
+            item["highlight"] = hl
         # 행사 기간 (선택). 'YYYY-MM-DD' 형식만 보낸다.
         for key, field in (("start", "startsOn"), ("end", "endsOn")):
             day = str(ov.get(key) or "").strip()
@@ -278,7 +289,7 @@ def delete_published(base_url, token, deal_ids):
 def update_published(base_url, token, deal_id, fields):
     """이미 발행한 글 수정. fields 에 넣은 칸만 바뀐다.
     fields: {"title", "image", "content", "startsOn", "endsOn", "category", "keywords",
-             "always", "soldOut", "benefit"} 중 일부. 비우려면 "" (상시 / 소진은 True / False) 를 넣는다.
+             "always", "soldOut", "benefit", "highlight"} 중 일부. 비우려면 "" (상시 / 소진은 True / False) 를 넣는다.
     고친 글(dict)을 돌려준다."""
     url = f"{normalize_endpoint(base_url)}?id={urllib.parse.quote(deal_id)}"
     res = _request(url, _check_token(token), fields, method="PATCH")
@@ -294,7 +305,7 @@ def update_period(base_url, token, deal_id, start, end):
 def publish_manual(base_url, token, fields):
     """직접 쓴 글 1건 발행. 만든 글의 id 를 돌려준다.
     fields: title(필수), link(선택: 원문 주소), source, image, content, category, keywords, startsOn, endsOn,
-            always, benefit"""
+            always, benefit, highlight"""
     item = {"manual": True, "platform": "manual", "query": ""}
     item.update({k: v for k, v in fields.items() if v not in (None, "")})
     res = publish(base_url, token, [item])

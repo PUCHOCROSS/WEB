@@ -1,7 +1,7 @@
 """글 쓰기 · 수정 창 (Posts 메뉴 → ✏ 새 글 쓰기 / ✏ 수정)
 
 - 새 글: 수집 없이 직접 써서 발행합니다. 원문 주소는 있으면 넣고, 없으면 비워 두세요.
-- 수정: 제목 / 카테고리 / 혜택 유형 · 상시 · 소진 / 검색 키워드 / 대표 이미지 / 본문 / 행사 기간을 고칩니다. 바뀐 칸만 홈페이지로 보냅니다.
+- 수정: 제목 / 카테고리 / 혜택 유형 · 상시 · 소진 / 강조 표시 / 검색 키워드 / 대표 이미지 / 본문 / 행사 기간을 고칩니다. 바뀐 칸만 홈페이지로 보냅니다.
 저장하면 홈 · 카테고리 · 달력 · 상세 페이지에 바로 반영됩니다.
 """
 import io
@@ -13,7 +13,8 @@ import webbrowser
 from tkinter import messagebox, ttk
 
 import theme as T
-from category_service import BenefitPicker, CategoryPicker, pick_and_upload
+from capture import capture_and_upload, paste_and_upload
+from category_service import BenefitPicker, CategoryPicker, HighlightPicker, pick_and_upload
 from date_picker import PeriodInput, parse_day
 from enrich import WRITE_MARK, extract_period, fetch_draft
 from publisher import clean_keywords, guess_benefit, publish_manual, run_async, site_url, update_published
@@ -103,6 +104,15 @@ class PostEditDialog:
         if not self.new:
             ttk.Checkbutton(type_row, text="선착순 소진", variable=self.soldout_var).pack(side="left", padx=(10, 0))
 
+        hl_row = tk.Frame(side, bg=T.BG)
+        hl_row.pack(fill="x", pady=(10, 0))
+        tk.Label(hl_row, text="강조 표시", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG).pack(side="left", padx=(0, 10))
+        self.hl_picker = HighlightPicker(hl_row)
+        self.hl_picker.set_slug(self.item.get("highlight") or "")
+        self.hl_picker.pack(side="left")
+        tk.Label(hl_row, text="테두리 색으로 눈에 띄게 + 홈 추천에 먼저", font=T.font(8), fg=T.MUTED, bg=T.BG
+                 ).pack(side="left", padx=(10, 0))
+
         self._label(side, "검색 키워드 (선택)", pady=(10, 2))
         self._entry(side, self.kw_var, 10).pack(fill="x", ipady=4)
         tk.Label(side, text="쉼표로 구분. 제목에 없는 말로도 홈페이지 검색에 걸려요. 예) 스벅, 커피, 아메리카노",
@@ -120,7 +130,11 @@ class PostEditDialog:
                    command=lambda: (self.image_var.set(""), self._render_thumb())).pack(side="left", padx=(4, 0))
         self.btn_upload = FlatButton(img_row, "🖼 내 이미지", kind="ghost", command=self._upload)
         self.btn_upload.pack(side="left", padx=(4, 0))
-        tk.Label(side, text="'🖼 내 이미지'로 직접 만든 이미지를 올릴 수 있어요. 비우면 카테고리 아이콘이 나옵니다.",
+        self.btn_capture = FlatButton(img_row, "✂ 화면 캡처", kind="ghost",
+                                      command=lambda: capture_and_upload(self.dlg, self.set_image, self.btn_capture))
+        self.btn_capture.pack(side="left", padx=(4, 0))
+        tk.Label(side, text="✂ 화면 캡처로 화면 일부를 바로 올리거나, Win+Shift+S 로 캡처한 뒤 📋 붙여넣기. "
+                            "비우면 카테고리 아이콘이 나옵니다.",
                  font=T.font(8), fg=T.MUTED, bg=T.BG, anchor="w").pack(fill="x", pady=(3, 0))
 
         if self.new:
@@ -232,13 +246,26 @@ class PostEditDialog:
                                  anchor="nw", image=photo)
         self.canvas.image = photo
 
+    def set_image(self, url):
+        """올린 이미지 주소를 넣고 미리보기 갱신 (창이 닫혔으면 무시)"""
+        try:
+            if not self.dlg.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        self.image_var.set(url)
+        self._render_thumb()
+
     def _paste_image(self):
+        if paste_and_upload(self.dlg, self.set_image, button=self.btn_upload):   # 캡처한 이미지가 있으면 올리기
+            return
         try:
             text = self.dlg.clipboard_get().strip()
         except tk.TclError:
             text = ""
         if not text.startswith(("http://", "https://")):
-            T.toast(self.dlg, "클립보드에 이미지 주소가 없습니다.\n원문에서 이미지를 우클릭 → '이미지 주소 복사' 후 눌러 주세요.", "warn")
+            T.toast(self.dlg, "클립보드에 캡처 이미지나 이미지 주소가 없습니다.\n"
+                              "Win+Shift+S 로 캡처하거나, 이미지를 우클릭 → '이미지 주소 복사' 후 눌러 주세요.", "warn")
             return
         self.image_var.set(text)
         self._render_thumb()
@@ -323,6 +350,7 @@ class PostEditDialog:
             "benefit": self.benefit_picker.get_slug(),
             "always": bool(self.always_var.get()),
             "soldOut": bool(self.soldout_var.get()),
+            "highlight": self.hl_picker.get_slug(),
         }
         old = {k: (self.item.get(k) or "") for k in new}
         old["keywords"] = clean_keywords(old["keywords"])
@@ -372,7 +400,7 @@ class PostEditDialog:
             self.on_saved(self.item["id"], payload)
             names = {"title": "제목", "image": "이미지", "content": "본문", "startsOn": "기간", "endsOn": "기간",
                      "category": "카테고리", "keywords": "검색 키워드", "benefit": "혜택 유형",
-                     "always": "상시", "soldOut": "소진"}
+                     "always": "상시", "soldOut": "소진", "highlight": "강조 표시"}
             changed = ", ".join(dict.fromkeys(names[k] for k in fields))
             T.toast(self.page, f"저장했습니다 ({changed}). 홈페이지에 바로 반영됩니다.", "ok")
 
@@ -411,7 +439,8 @@ class PostEditDialog:
         fields = {"title": title, "link": link, "source": self.source_var.get().strip(), "image": image,
                   "content": content, "category": self.cat_picker.get_slug(),
                   "keywords": clean_keywords(self.kw_var.get()), "benefit": self.benefit_picker.get_slug(),
-                  "always": bool(self.always_var.get()), "startsOn": start, "endsOn": end}
+                  "always": bool(self.always_var.get()), "highlight": self.hl_picker.get_slug(),
+                  "startsOn": start, "endsOn": end}
         url, token = STORE.get("publish.url", ""), STORE.get("publish.token", "")
         self.btn_save.set("발행 중...", enabled=False)
         self.lbl_msg.config(text="")

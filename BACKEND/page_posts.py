@@ -92,6 +92,8 @@ class PagePosts(ttk.Frame):
             self, "Posts", "홈페이지에 올라간 글을 확인하고, 내용을 고치거나 삭제합니다.")
         header.pack(fill="x")
         FlatButton(right, "✏ 새 글 쓰기", command=self.new_post, kind="primary").pack(side="right")
+        self.btn_capture = FlatButton(right, "✂ 캡처로 새 글", command=self.capture_post, kind="primary")
+        self.btn_capture.pack(side="right", padx=(0, 8))
         FlatButton(right, "📋 표로 여러 건 등록", command=self.bulk_import, kind="primary").pack(side="right", padx=(0, 8))
         FlatButton(right, "홈페이지 열기", command=self._open_site, kind="ghost").pack(side="right", padx=(0, 8))
         self.btn_reload = FlatButton(right, "↻ 새로고침", command=self.reload, kind="ghost")
@@ -213,7 +215,9 @@ class PagePosts(ttk.Frame):
             elif text == "오늘 마감" or (text.startswith("D-") and int(text[2:]) <= 3):
                 tags.append("urgent")
             self.tree.insert("", "end", iid=it["id"], tags=tags, values=(
-                _local_day(it.get("publishedAt", "")), it.get("title", ""), self._cat_text(it),
+                _local_day(it.get("publishedAt", "")),
+                ({"hot": "🔥 ", "pick": "⭐ "}.get(it.get("highlight") or "", "")) + it.get("title", ""),
+                self._cat_text(it),
                 BENEFIT_LABEL.get(it.get("benefit") or "", "—"),
                 period_label(it) or "—", text, f"{int(it.get('views') or 0):,}"))
         still = [i for i in keep if self.tree.exists(i)]
@@ -298,6 +302,18 @@ class PagePosts(ttk.Frame):
             return
         PostEditDialog(self, {}, on_saved=lambda _id, _f: self.reload(), new=True)
 
+    def capture_post(self):
+        """✂ 화면을 캡처해서 그 이미지로 새 글 쓰기 (창이 잠깐 숨었다가 돌아옵니다)"""
+        if not is_configured():
+            T.toast(self, "홈페이지 연결이 설정되지 않았습니다.\nPublish 메뉴에서 사이트 주소와 토큰을 먼저 저장하세요.", "warn")
+            return
+        from capture import capture_region, upload_pil
+
+        def got(img):
+            dlg = PostEditDialog(self, {}, on_saved=lambda _id, _f: self.reload(), new=True)
+            upload_pil(dlg.dlg, img, dlg.set_image, button=dlg.btn_capture)
+        capture_region(self, got)
+
     def bulk_import(self):
         if not is_configured():
             T.toast(self, "홈페이지 연결이 설정되지 않았습니다.\nPublish 메뉴에서 사이트 주소와 토큰을 먼저 저장하세요.", "warn")
@@ -318,7 +334,7 @@ class PagePosts(ttk.Frame):
         for it in self.items:
             if it["id"] == deal_id:
                 it.update({k: item.get(k) for k in ("title", "image", "content", "startsOn", "endsOn", "category",
-                                                     "keywords", "always", "soldOut", "benefit")})
+                                                     "keywords", "always", "soldOut", "benefit", "highlight")})
         self._render()
 
     def toggle_soldout(self):

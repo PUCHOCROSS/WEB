@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { DealSummary } from "../lib/categories";
+import { highlightOf } from "../lib/highlight";
 import PeriodBadge, { CalendarGlyph, periodLong } from "./PeriodBadge";
 import Thumb from "./Thumb";
 
@@ -9,6 +10,12 @@ import Thumb from "./Thumb";
 export default function RecommendCard({ deal, layout = "column" }: { deal: DealSummary; layout?: "column" | "row" }) {
   const cat = deal.cat;
   const period = periodLong(deal.startsOn, deal.endsOn);
+  const hl = deal.badge?.tone === "ended" || deal.soldOut ? null : highlightOf(deal.highlight);
+  const tag = hl && (
+    <span className={`rounded-full px-2 py-0.5 text-[11.5px] font-bold shadow-sm ${hl.tag}`}>
+      <span aria-hidden>{hl.emoji}</span> {hl.label}
+    </span>
+  );
   const date = period && (
     <p className="flex items-center gap-1.5 whitespace-nowrap text-[12.5px] tabular-nums text-muted">
       <CalendarGlyph />
@@ -20,11 +27,12 @@ export default function RecommendCard({ deal, layout = "column" }: { deal: DealS
     return (
       <Link
         href={`/deal/${deal.id}`}
-        className="flex h-full items-center gap-4 rounded-[18px] border border-rule p-4 transition-colors hover:border-brand/50"
+        className={`flex h-full items-center gap-4 rounded-[18px] border border-rule p-4 transition-colors hover:border-brand/50 ${hl ? hl.card : ""}`}
         style={{ background: `linear-gradient(135deg, ${cat.color}10, #ffffff 58%)` }}
       >
         <div className="min-w-0 flex-1">
           <div className="mb-1.5 flex items-center gap-2">
+            {tag}
             <PeriodBadge badge={deal.badge} />
             <span className="truncate text-[12.5px] font-semibold" style={{ color: cat.color }}>
               {cat.label}
@@ -43,7 +51,7 @@ export default function RecommendCard({ deal, layout = "column" }: { deal: DealS
   return (
     <Link
       href={`/deal/${deal.id}`}
-      className="group flex h-full flex-col overflow-hidden rounded-[18px] border border-rule bg-white p-2.5 transition-colors hover:border-brand/50"
+      className={`group flex h-full flex-col overflow-hidden rounded-[18px] border border-rule bg-white p-2.5 transition-colors hover:border-brand/50 ${hl ? hl.card : ""}`}
     >
       <div className="relative aspect-[4/3] overflow-hidden rounded-[14px]">
         <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.icon} iconClass="h-12 w-12" />
@@ -52,6 +60,7 @@ export default function RecommendCard({ deal, layout = "column" }: { deal: DealS
             <PeriodBadge badge={deal.badge} />
           </span>
         )}
+        {tag && <span className="absolute left-2 top-2">{tag}</span>}
       </div>
       <div className="flex flex-1 flex-col px-1.5 pb-1 pt-3">
         <p className="truncate text-[13px] font-semibold" style={{ color: cat.color }}>

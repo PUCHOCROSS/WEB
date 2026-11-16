@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { isAdmin } from "../../../lib/admin";
 import { adminStatus, STATUS_LABEL, type AdminStatus } from "../../../lib/adminStatus";
 import { benefitOf } from "../../../lib/benefits";
+import { highlightOf } from "../../../lib/highlight";
 import { normTitle } from "../../../lib/bulkParse";
 import { catInfo, categorize } from "../../../lib/categories";
 import { getCategories } from "../../../lib/categoryStore";
@@ -138,6 +139,11 @@ export default async function AdminPosts({ searchParams }: Props) {
                 <tr key={d.id} className={dim ? "text-ink/50" : ""}>
                   <td className="max-w-[360px] px-4 py-2.5">
                     <Link href={`/admin/posts/${d.id}`} className="block truncate font-semibold hover:underline" title={d.title}>
+                      {highlightOf(d.highlight) && (
+                        <span className="mr-1" title={`강조: ${highlightOf(d.highlight)!.label}`}>
+                          {highlightOf(d.highlight)!.emoji}
+                        </span>
+                      )}
                       {d.title}
                     </Link>
                     <span className="text-[12px] text-muted">

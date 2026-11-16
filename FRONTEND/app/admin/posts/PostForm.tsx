@@ -1,8 +1,9 @@
 "use client";
 // 글 쓰기 · 고치기 화면 (새 글: /admin/posts/new, 고치기: /admin/posts/[id])
 import Link from "next/link";
-import { startTransition, useActionState, useRef, useState, type ReactNode } from "react";
+import { startTransition, useActionState, useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import { BENEFITS, guessBenefit } from "../../../lib/benefits";
+import { HIGHLIGHTS } from "../../../lib/highlight";
 import { savePost, uploadImage, type SaveState } from "./actions";
 
 export type PostFormValues = {
@@ -19,6 +20,7 @@ export type PostFormValues = {
   benefit: string;
   always: boolean;
   soldOut: boolean;
+  highlight: string;
 };
 
 const field =
@@ -55,6 +57,7 @@ export default function PostForm({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [always, setAlways] = useState(initial.always);
+  const [highlight, setHighlight] = useState(initial.highlight);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const onTitle = (v: string) => {
@@ -62,13 +65,14 @@ export default function PostForm({
     if (!benefitTouched) setBenefit(guessBenefit(v)); // 유형을 직접 고르기 전까지는 제목으로 추천
   };
 
-  const onFile = async (file: File | undefined) => {
+  const onFile = async (file: File | Blob | undefined | null) => {
     if (!file) return;
     setUploading(true);
     setUploadError("");
     try {
       const fd = new FormData();
-      fd.append("file", await shrink(file), file.name);
+      const f = file instanceof File ? file : new File([file], "capture.png", { type: file.type || "image/png" });
+      fd.append("file", await shrink(f), f.name);
       const res = await uploadImage(fd);
       if ("url" in res) setImage(res.url);
       else setUploadError(res.error);
@@ -77,6 +81,33 @@ export default function PostForm({
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  // 캡처 붙여넣기: Win+Shift+S (맥: Cmd+Ctrl+Shift+4) 로 화면을 캡처한 뒤
+  // 이 화면 아무 데서나 Ctrl+V 하면 대표 이미지로 바로 올라간다. (글자 칸에 글을 붙여넣는 건 그대로)
+  const onPastedImage = useEffectEvent((file: File | null) => onFile(file));
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const item = Array.from(e.clipboardData?.items ?? []).find((i) => i.kind === "file" && i.type.startsWith("image/"));
+      if (!item) return;
+      e.preventDefault();
+      onPastedImage(item.getAsFile());
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, []);
+
+  const pasteButton = async () => {
+    setUploadError("");
+    try {
+      for (const item of await navigator.clipboard.read()) {
+        const type = item.types.find((t) => t.startsWith("image/"));
+        if (type) return onFile(await item.getType(type));
+      }
+      setUploadError("클립보드에 캡처한 이미지가 없어요. Win+Shift+S 로 캡처한 뒤 다시 눌러 주세요.");
+    } catch {
+      setUploadError("브라우저가 클립보드를 못 읽게 막았어요. 이 화면에서 Ctrl+V 를 눌러 주세요.");
     }
   };
 
@@ -178,6 +209,38 @@ export default function PostForm({
             )}
           </div>
 
+          <div>
+            <span className="mb-1.5 block text-[13.5px] font-bold text-ink/85">강조 표시</span>
+            <input type="hidden" name="highlight" value={highlight} />
+            <div className="grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="강조 표시">
+              {[{ slug: "", label: "없음", emoji: "", on: "border-ink/40 bg-ground text-ink" }, ...HIGHLIGHTS.map((h) => ({
+                ...h,
+                on: h.slug === "hot" ? "border-[#F04452] bg-[#FDECEC] text-[#D93636]" : "border-brand bg-brand-soft text-brand-dark",
+              }))].map((h) => (
+                <button
+                  key={h.slug || "none"}
+                  type="button"
+                  role="radio"
+                  aria-checked={highlight === h.slug}
+                  onClick={() => setHighlight(h.slug)}
+                  className={`rounded-xl border-2 py-2 text-[13.5px] font-bold transition-colors ${
+                    highlight === h.slug ? h.on : "border-rule bg-white text-ink/60 hover:border-ink/25"
+                  }`}
+                >
+                  {h.emoji && <span aria-hidden>{h.emoji} </span>}
+                  {h.label}
+                </button>
+              ))}
+            </div>
+            <span className="mt-1 block text-[12.5px] text-muted">
+              {highlight === "hot"
+                ? "빨간 테두리 + '중요' 꼬리표. 홈 추천에 맨 먼저 올라가요."
+                : highlight === "pick"
+                  ? "초록 테두리 + '추천' 꼬리표. 홈 추천에 먼저 올라가요."
+                  : "꼭 알릴 글만 골라 주세요. 많으면 눈에 덜 띕니다."}
+            </span>
+          </div>
+
           <Field label="검색 키워드" hint="쉼표로 구분. 제목에 없는 말로도 검색돼요. 예) 스벅, 커피">
             <input name="keywords" defaultValue={initial.keywords} className={field} />
           </Field>
@@ -201,7 +264,15 @@ export default function PostForm({
               disabled={uploading}
               className="flex-1 rounded-full border border-rule bg-white py-2 text-[13.5px] font-semibold hover:border-brand/50 disabled:opacity-50"
             >
-              {uploading ? "올리는 중..." : "🖼 내 이미지 올리기"}
+              {uploading ? "올리는 중..." : "🖼 내 이미지"}
+            </button>
+            <button
+              type="button"
+              onClick={pasteButton}
+              disabled={uploading}
+              className="flex-1 rounded-full border border-rule bg-white py-2 text-[13.5px] font-semibold hover:border-brand/50 disabled:opacity-50"
+            >
+              ✂ 캡처 붙여넣기
             </button>
             {image && (
               <button type="button" onClick={() => setImage("")} className="rounded-full px-3 text-[13px] text-muted hover:text-ink">
@@ -211,7 +282,10 @@ export default function PostForm({
           </div>
           <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
           {uploadError && <p className="text-[13px] text-[#C62828]">{uploadError}</p>}
-          <p className="text-[12px] leading-relaxed text-muted">원문 배너는 저작권이 있을 수 있어요. 직접 만든 이미지나 아이콘이 안전합니다.</p>
+          <p className="text-[12px] leading-relaxed text-muted">
+            <b className="text-ink/75">캡처로 올리기:</b> Win+Shift+S 로 화면 일부를 캡처한 뒤 이 화면에서 Ctrl+V.
+            브랜드 배너·로고가 크게 나온 캡처는 피하고, 쿠폰 내용이 보이는 부분만 잘라 주세요.
+          </p>
         </div>
 
         {state?.error && (
