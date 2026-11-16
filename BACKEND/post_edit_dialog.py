@@ -107,8 +107,9 @@ class PostEditDialog:
         hl_row = tk.Frame(side, bg=T.BG)
         hl_row.pack(fill="x", pady=(10, 0))
         tk.Label(hl_row, text="강조 표시", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG).pack(side="left", padx=(0, 10))
-        self.hl_picker = HighlightPicker(hl_row)
+        self.hl_picker = HighlightPicker(hl_row, on_change=self._show_highlight)
         self.hl_picker.set_slug(self.item.get("highlight") or "")
+        self._show_highlight()
         self.hl_picker.pack(side="left")
         tk.Label(hl_row, text="테두리 색으로 눈에 띄게 + 홈 추천에 먼저", font=T.font(8), fg=T.MUTED, bg=T.BG
                  ).pack(side="left", padx=(10, 0))
@@ -245,6 +246,13 @@ class PostEditDialog:
         self.canvas.create_image((THUMB_W - photo.width()) // 2, (THUMB_H - photo.height()) // 2,
                                  anchor="nw", image=photo)
         self.canvas.image = photo
+
+    HL_COLOR = {"hot": "#F04452", "pick": "#16A35A"}
+
+    def _show_highlight(self):
+        """고른 강조 색을 썸네일 테두리로 미리 보여 준다"""
+        color = self.HL_COLOR.get(self.hl_picker.get_slug())
+        self.canvas.config(highlightthickness=3 if color else 1, highlightbackground=color or T.BORDER)
 
     def set_image(self, url):
         """올린 이미지 주소를 넣고 미리보기 갱신 (창이 닫혔으면 무시)"""

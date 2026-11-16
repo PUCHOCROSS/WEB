@@ -23,7 +23,8 @@ from publisher import BENEFITS, delete_published, list_published, run_async, sit
 from store import STORE
 from theme import FlatButton
 
-FILTERS = ("전체", "진행 중", "곧 시작", "종료", "상시", "소진", "기간 없음")
+FILTERS = ("전체", "강조", "진행 중", "곧 시작", "종료", "상시", "소진", "기간 없음")
+HL_MARK = {"hot": "🔥 ", "pick": "⭐ "}
 BENEFIT_LABEL = dict(BENEFITS)
 
 
@@ -120,6 +121,8 @@ class PagePosts(ttk.Frame):
         FlatButton(btns, "✏ 수정", command=self.edit_post, kind="primary").pack(side="left")
         FlatButton(btns, "📅 기간 수정", command=self.edit_period, kind="ghost").pack(side="left", padx=(8, 0))
         FlatButton(btns, "⛔ 소진 표시", command=self.toggle_soldout, kind="ghost").pack(side="left", padx=(8, 0))
+        self.btn_hl = FlatButton(btns, "🔥 강조 ▾", command=self._highlight_menu, kind="ghost")
+        self.btn_hl.pack(side="left", padx=(8, 0))
         FlatButton(btns, "🌐 홈페이지에서 보기", command=self.open_on_site, kind="ghost").pack(side="left", padx=(8, 0))
         FlatButton(btns, "🔗 원문 열기", command=self.open_source, kind="ghost").pack(side="left", padx=(8, 0))
         FlatButton(btns, "🗑 삭제", command=self.delete_selected, kind="danger").pack(side="right")
@@ -136,6 +139,10 @@ class PagePosts(ttk.Frame):
                 ("status", "상태", 90, "center", False), ("views", "조회", 60, "center", False)):
             self.tree.heading(cid, text=text, anchor="w" if anc == "w" else "center")
             self.tree.column(cid, width=w, anchor=anc, stretch=stretch, minwidth=50)
+        # 강조한 글: 줄 색으로 바로 보이게 (빨강 = 🔥 중요, 초록 = ⭐ 추천).
+        # 태그는 먼저 만든 것이 이기므로 줄무늬(odd/even)보다 먼저 만든다.
+        self.tree.tag_configure("hl_hot", background="#4A1F27", foreground="#FFD5D9")
+        self.tree.tag_configure("hl_pick", background="#163A2B", foreground="#C9F5DE")
         self.tree.tag_configure("odd", background=T.SURFACE)
         self.tree.tag_configure("even", background="#1F2534")
         self.tree.tag_configure("ended", foreground=T.MUTED)
@@ -195,7 +202,10 @@ class PagePosts(ttk.Frame):
         for it in self.items:
             if q and q not in f"{it.get('title', '')} {it.get('source', '')}".lower():
                 continue
-            if key and status_of(it)[0] != key:
+            if f == "강조":
+                if not it.get("highlight"):
+                    continue
+            elif key and status_of(it)[0] != key:
                 continue
             out.append(it)
         return out
@@ -214,9 +224,11 @@ class PagePosts(ttk.Frame):
                 tags.append("none")
             elif text == "오늘 마감" or (text.startswith("D-") and int(text[2:]) <= 3):
                 tags.append("urgent")
+            if kind not in ("ended", "soldout") and it.get("highlight") in HL_MARK:
+                tags.append("hl_" + it["highlight"])
             self.tree.insert("", "end", iid=it["id"], tags=tags, values=(
                 _local_day(it.get("publishedAt", "")),
-                ({"hot": "🔥 ", "pick": "⭐ "}.get(it.get("highlight") or "", "")) + it.get("title", ""),
+                HL_MARK.get(it.get("highlight") or "", "") + it.get("title", ""),
                 self._cat_text(it),
                 BENEFIT_LABEL.get(it.get("benefit") or "", "—"),
                 period_label(it) or "—", text, f"{int(it.get('views') or 0):,}"))
@@ -368,6 +380,49 @@ class PagePosts(ttk.Frame):
                 T.toast(self, f"{len(saved)}건 {word}. {len(errors)}건 실패\n{errors[0]}", "warn")
             else:
                 T.toast(self, f"{len(saved)}건을 {word}. 홈페이지에 바로 반영됩니다.", "ok")
+
+        run_async(self, work, done)
+
+    def _highlight_menu(self):
+        """선택한 글의 강조 표시를 한 번에 바꾸는 메뉴"""
+        if not self._selected():
+            T.toast(self, "강조할 글을 선택하세요. 여러 개를 골라 한 번에 바꿀 수 있어요.", "warn")
+            return
+        m = tk.Menu(self, tearoff=0)
+        m.add_command(label="🔥 중요 (빨간 테두리)", command=lambda: self.set_highlight("hot"))
+        m.add_command(label="⭐ 추천 (초록 테두리)", command=lambda: self.set_highlight("pick"))
+        m.add_separator()
+        m.add_command(label="강조 해제", command=lambda: self.set_highlight(""))
+        m.tk_popup(self.btn_hl.winfo_rootx(), self.btn_hl.winfo_rooty() + self.btn_hl.winfo_height())
+
+    def set_highlight(self, value):
+        sel = self._selected()
+        if not sel:
+            return
+        url, token = self._conn()
+        ids = [it["id"] for it in sel]
+
+        def work():
+            saved, errors = {}, []
+            for did in ids:
+                try:
+                    item = update_published(url, token, did, {"highlight": value})
+                    saved[did] = {"highlight": item.get("highlight", value or None)}
+                except Exception as e:  # noqa: BLE001
+                    errors.append(str(e))
+            return saved, errors
+
+        def done(ok, payload):
+            if not ok:
+                T.toast(self, f"저장 실패\n{payload}", "err")
+                return
+            saved, errors = payload
+            self._apply_saved(saved)
+            word = {"hot": "🔥 중요로 표시했습니다", "pick": "⭐ 추천으로 표시했습니다"}.get(value, "강조를 풀었습니다")
+            if errors:
+                T.toast(self, f"{len(saved)}건 {word}. {len(errors)}건 실패\n{errors[0]}", "warn")
+            else:
+                T.toast(self, f"{len(saved)}건 {word}. 홈페이지에 바로 반영됩니다.", "ok")
 
         run_async(self, work, done)
 

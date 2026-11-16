@@ -157,7 +157,8 @@ class EditDialog:
                                          on_change=lambda: self._save_current(render_thumb=False))
         self.cat_picker.pack(side="left")
         tk.Label(cat_row, text="강조 표시", font=T.font(9, "bold"), fg=T.MUTED, bg=T.BG).pack(side="left", padx=(18, 10))
-        self.hl_picker = HighlightPicker(cat_row, on_change=lambda: self._save_current(render_thumb=False))
+        self.hl_picker = HighlightPicker(cat_row, on_change=lambda: (self._save_current(render_thumb=False),
+                                                                     self._show_highlight()))
         self.hl_picker.pack(side="left")
 
         type_row = tk.Frame(right, bg=T.BG)
@@ -307,6 +308,7 @@ class EditDialog:
         self.benefit_picker.set_slug(data.get("benefit", ""))
         self.always_var.set(bool(data.get("always")))
         self.hl_picker.set_slug(data.get("highlight", ""))
+        self._show_highlight()
         self.excl_var.set(link in self.excluded)
         if link.startswith("manual:"):
             self.lbl_link.pack_forget()
@@ -350,6 +352,11 @@ class EditDialog:
     def _clear_image(self):
         self.image_var.set("")
         self._save_current()
+
+    def _show_highlight(self):
+        """고른 강조 색을 썸네일 테두리로 미리 보여 준다 (홈페이지 카드와 같은 색)"""
+        color = {"hot": "#F04452", "pick": "#16A35A"}.get(self.hl_picker.get_slug())
+        self.thumb_canvas.config(highlightthickness=3 if color else 1, highlightbackground=color or T.BORDER)
 
     def _set_uploaded(self, url):
         """올린 이미지 주소를 지금 보고 있는 항목에 넣는다"""
