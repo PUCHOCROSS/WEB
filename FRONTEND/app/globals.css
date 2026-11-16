@@ -28,6 +28,7 @@ body {
   font-family: var(--font-sans);
   word-break: keep-all; /* 한글 단어가 줄 끝에서 쪼개지지 않게 */
   overflow-wrap: anywhere;
+  overflow-x: clip; /* 혹시 넓은 요소가 있어도 화면이 옆으로 밀리지 않게 (sticky 헤더는 그대로) */
 }
 
 /* 제목용: 굵고 촘촘하게 */

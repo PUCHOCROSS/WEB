@@ -110,7 +110,7 @@ export default function DealList({
       ) : filtered.length === 0 ? (
         <EmptyBox>찾는 소식이 없어요. 더 짧은 단어로 검색해 보세요.</EmptyBox>
       ) : (
-        <div className="grid grid-cols-1 gap-4 min-[440px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 min-[440px]:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
           {filtered.map((deal) => (
             <DealCard key={deal.id} deal={deal} />
           ))}

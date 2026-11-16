@@ -53,7 +53,8 @@ export default function Thumb({
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#F3F5F4]">
       {fit === "fill" && img("absolute inset-0 h-full w-full scale-110 object-cover opacity-50 blur-xl", true)}
-      {img("relative h-full w-full object-contain")}
+      {/* absolute: 이미지 원래 크기가 칸 너비 계산에 끼어들지 않게 (아이폰 사파리에서 카드가 화면 밖으로 넓어지던 문제) */}
+      {img("absolute inset-0 h-full w-full object-contain")}
     </div>
   );
 }

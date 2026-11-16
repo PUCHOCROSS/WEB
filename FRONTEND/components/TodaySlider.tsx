@@ -115,7 +115,7 @@ export default function TodaySlider({ items, dateLabel }: { items: DealSummary[]
         ref={track}
         onTouchStart={() => setStopped(true)}
         onWheel={(e) => Math.abs(e.deltaX) > Math.abs(e.deltaY) && setStopped(true)}
-        className="-mx-5 flex snap-x snap-mandatory scroll-px-5 gap-3 overflow-x-auto scroll-smooth px-5 pb-2 sm:scroll-px-0 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden"
+        className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-3 overflow-x-auto scroll-smooth px-4 pb-2 sm:scroll-px-0 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden"
       >
         {items.map((d, i) => (
           <TicketSlide key={d.id} deal={d} label={`${i + 1} / ${items.length}`} />

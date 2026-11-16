@@ -82,7 +82,7 @@ export default async function Home() {
           <p className="card px-6 py-16 text-center text-muted">목록을 불러오지 못했습니다. 잠시 후 새로고침해 주세요.</p>
         ) : (
           <>
-            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start">
               {/* ── 오늘의 추천 행사 ── */}
               <section className="card p-5 sm:p-6">
                 <div className="mb-4 flex items-center justify-between">
@@ -97,7 +97,7 @@ export default async function Home() {
                 {recommended.length === 0 ? (
                   <p className="py-10 text-center text-muted">곧 새로운 쿠폰과 행사로 채워질 예정이에요.</p>
                 ) : (
-                  <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-3">
                     {recommended.map((d) => (
                       <RecommendCard key={d.id} deal={d} />
                     ))}
