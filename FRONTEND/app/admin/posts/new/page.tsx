@@ -15,6 +15,7 @@ export default async function NewPost() {
   return (
     <AdminShell active="new" title="새 글 쓰기" sub="한 건을 직접 써서 바로 홈페이지에 발행합니다.">
       <PostForm
+        hasAi={Boolean(process.env.ANTHROPIC_API_KEY)}
         categories={cats}
         initial={{
           title: "", link: "", sourceUrl: "", source: "", image: "", content: "", startsOn: "", endsOn: "",
