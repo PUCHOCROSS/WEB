@@ -362,6 +362,11 @@ def prepare_image(path):
     if max(img.size) > MAX_SIDE:
         img.thumbnail((MAX_SIDE, MAX_SIDE))
     has_alpha = img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info)
+    if has_alpha:
+        # 화면 캡처는 RGBA 여도 실제로 투명한 곳이 없다 → JPG 로 (용량이 훨씬 작다)
+        alpha = img.convert("RGBA").getchannel("A")
+        if alpha.getextrema()[0] == 255:
+            has_alpha = False
     out = io.BytesIO()
     if has_alpha:
         img.save(out, "PNG", optimize=True)

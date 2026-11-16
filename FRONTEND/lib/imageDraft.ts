@@ -152,14 +152,63 @@ async function aiDraft(bytes: Uint8Array, mime: string, cats: Category[]): Promi
   };
 }
 
+/** 이미지 속 글자를 그대로 옮겨 적기 (도구 > 이미지 → 텍스트, AI 모드) */
+export async function aiTranscribe(bytes: Uint8Array): Promise<string> {
+  const mime = sniffImage(bytes);
+  if (!mime) throw new DraftError("JPG, PNG, WEBP, GIF 이미지만 읽을 수 있습니다.");
+  if (!process.env.ANTHROPIC_API_KEY) throw new DraftError("AI 를 쓰려면 ANTHROPIC_API_KEY 를 설정하세요.");
+  const base = (process.env.ANTHROPIC_BASE_URL || "https://api.anthropic.com").replace(/\/$/, "");
+  const res = await fetch(`${base}/v1/messages`, {
+    method: "POST",
+    headers: { "x-api-key": process.env.ANTHROPIC_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+    body: JSON.stringify({
+      model: MODEL(),
+      max_tokens: 4000,
+      messages: [
+        {
+          role: "user",
+          content: [
+            { type: "image", source: { type: "base64", media_type: mime, data: Buffer.from(bytes).toString("base64") } },
+            {
+              type: "text",
+              text: "이미지에 보이는 글자를 위에서 아래, 왼쪽에서 오른쪽 순서로 빠짐없이 그대로 옮겨 적어 주세요. 줄바꿈은 이미지와 비슷하게 유지하고, 표는 칸 사이를 ' | ' 로 구분하세요. 설명이나 머리말 없이 옮겨 적은 글자만 출력하세요. 글자가 없으면 빈 칸으로 두세요.",
+            },
+          ],
+        },
+      ],
+    }),
+    cache: "no-store",
+    signal: AbortSignal.timeout(60_000),
+  });
+  if (!res.ok) {
+    if (res.status === 401) throw new DraftError("ANTHROPIC_API_KEY 가 올바르지 않습니다.");
+    throw new DraftError(`Claude API 오류 (${res.status})`);
+  }
+  const data = (await res.json()) as { content?: { type: string; text?: string }[] };
+  return (data.content ?? []).filter((c) => c.type === "text").map((c) => c.text ?? "").join("").trim();
+}
+
+/** 무료 글자 인식 결과 정리 (도구 > 이미지 → 텍스트) */
+export async function ocrTranscribe(bytes: Uint8Array): Promise<string> {
+  if (!sniffImage(bytes)) throw new DraftError("JPG, PNG, WEBP, GIF 이미지만 읽을 수 있습니다.");
+  const raw = await readText(bytes, false);
+  return raw
+    .split("\n")
+    .map((l) => l.replace(/[ \t]+/g, " ").replace(/\b([1-9]\d?)\s?96\b/g, "$1%").trim())
+    .join("\n")
+    .replace(/\n{2,}/g, "\n") // 줄마다 끼는 빈 줄 없애기
+    .trim();
+}
+
 // ── 2) 무료 글자 인식 (OCR) ────────────────────────────────────────────────
 // tesseract.js + 한국어 데이터(@tesseract.js-data/kor). 처음 한 번은 준비에 몇 초 걸립니다.
-async function readText(bytes: Uint8Array): Promise<string> {
+export async function readText(bytes: Uint8Array, sparse = true): Promise<string> {
   const { createWorker, PSM } = await import("tesseract.js");
   const langPath = path.join(process.cwd(), "node_modules", "@tesseract.js-data", "kor", "4.0.0_best_int");
   const worker = await createWorker("kor", 1, { langPath, gzip: true, cachePath: "/tmp/tesseract-cache" });
   try {
-    await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
+    // sparse: 광고 이미지처럼 글자가 흩어진 경우 / auto: 문서 · 캡처처럼 문단이 있는 경우
+    await worker.setParameters({ tessedit_pageseg_mode: sparse ? PSM.SPARSE_TEXT : PSM.AUTO });
     const r = await worker.recognize(Buffer.from(bytes));
     return r.data.text;
   } finally {

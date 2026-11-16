@@ -4,6 +4,7 @@ import Link from "next/link";
 import { startTransition, useActionState, useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import { BENEFITS, guessBenefit } from "../../../lib/benefits";
 import { HIGHLIGHTS } from "../../../lib/highlight";
+import { shrink } from "../_ui/shrink";
 import RichEditor from "./RichEditor";
 import { draftFromImageAction, savePost, uploadImage, type SaveState } from "./actions";
 
@@ -26,21 +27,6 @@ export type PostFormValues = {
 
 const field =
   "w-full rounded-xl border border-rule bg-white px-3.5 py-2.5 text-[15px] focus:border-brand focus:outline-none focus:ring-4 focus:ring-brand/10";
-
-/** 큰 사진은 브라우저에서 긴 변 1600px 로 줄여서 올린다 (투명 PNG·GIF 는 그대로) */
-async function shrink(file: File): Promise<Blob> {
-  if (file.type === "image/gif") return file;
-  const bitmap = await createImageBitmap(file).catch(() => null);
-  if (!bitmap) return file;
-  const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
-  if (scale === 1 && file.size <= 1_500_000) return file;
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  const type = file.type === "image/png" ? "image/png" : "image/jpeg";
-  return await new Promise<Blob>((res) => canvas.toBlob((b) => res(b ?? file), type, 0.86));
-}
 
 export default function PostForm({
   initial,
@@ -135,15 +121,20 @@ export default function PostForm({
     try {
       const fd = new FormData();
       const f = file instanceof File ? file : new File([file], "capture.png", { type: file.type || "image/png" });
-      fd.append("file", await shrink(f), f.name);
+      const ready = await shrink(f);
+      if (ready.size > 4 * 1024 * 1024) {
+        setUploadError("이미지가 너무 커서 줄이지 못했어요. 캡처 범위를 조금 작게 해 주세요.");
+        return;
+      }
+      fd.append("file", ready, ready.name);
       const res = await uploadImage(fd);
       if ("url" in res) {
         setImage(res.url);
-        lastFile.current = { url: res.url, file: f };
+        lastFile.current = { url: res.url, file: ready };
       }
       else setUploadError(res.error);
     } catch {
-      setUploadError("이미지를 올리지 못했습니다. 4MB 이하의 JPG · PNG · WEBP · GIF 인지 확인하세요.");
+      setUploadError("이미지를 올리지 못했습니다. 잠시 후 다시 시도하거나, 캡처 범위를 조금 작게 해 주세요.");
     } finally {
       setUploading(false);
       if (fileRef.current) fileRef.current.value = "";

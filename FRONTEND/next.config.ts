@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/draft": OCR_FILES,
     "/admin/posts/**": OCR_FILES,
+    "/admin/util/**": OCR_FILES,
   },
   experimental: {
     serverActions: {
