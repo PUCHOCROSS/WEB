@@ -4,6 +4,7 @@
 // 발행할 때 넣은 기간이 있으면 그걸 쓰고, 없으면 본문/제목에서
 // "11월 14일부터 20일까지", "11.14(금) ~ 11.20(목)", "11월 30일까지" 같은 표현을 찾아 읽습니다.
 // (Work Hub 의 enrich.py extract_period 와 같은 규칙입니다. 한쪽을 고치면 다른 쪽도 맞춰 주세요)
+import { stripRich } from "./richText";
 
 export type Period = {
   start: string | null;
@@ -128,7 +129,7 @@ export function dealPeriod(d: {
     return { start: isDay(d.startsOn) ? d.startsOn : null, end: isDay(d.endsOn) ? d.endsOn : null, inferred: false };
   }
   const ref = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul" }).format(new Date(d.publishedAt));
-  const p = parsePeriod(`${d.content ?? ""}\n${d.title}`, ref);
+  const p = parsePeriod(`${stripRich(d.content)}\n${d.title}`, ref);
   return { ...p, inferred: Boolean(p.start || p.end) };
 }
 

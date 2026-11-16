@@ -15,6 +15,7 @@
 // 찾는 곳: 제목 · 수집 키워드(query) · 출처 · 카테고리 이름 · 본문(있으면)
 // 이 파일은 브라우저에서도 쓰이므로 서버 전용 코드는 넣지 않습니다.
 import { benefitOf } from "./benefits";
+import { stripRich } from "./richText";
 
 // ───────── 별명·연관어 사전 ─────────
 // 한 줄 = 한 묶음. 행사 글에 묶음 중 하나라도 있으면, 묶음 전체 단어로 검색됩니다.
@@ -131,7 +132,7 @@ function buildEntry<T extends Record<string, any>>(item: T): Indexed<T> {
       item.query,
       item.source,
       item.cat?.label,
-      item.content,
+      stripRich(toText(item.content)),
       item.keywords,
       benefitOf(item.benefit)?.label, // "룰렛", "선착순" 으로도 검색
       item.always ? "상시" : "",

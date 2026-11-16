@@ -25,6 +25,7 @@ from category_service import BenefitPicker, CategoryPicker, HighlightPicker, pic
 from date_picker import PeriodInput
 from enrich import WRITE_MARK, extract_period, fetch_draft, valid_day
 from publisher import guess_benefit
+from rich_text import RichToolbar
 from theme import FlatButton
 
 THUMB_W, THUMB_H = 220, 130
@@ -243,6 +244,9 @@ class EditDialog:
         self.content_text.pack(side="left", fill="both", expand=True)
         content_sb.pack(side="left", fill="y")
         self.content_text.bind("<FocusOut>", lambda e: self._save_current(render_thumb=False))
+        # 꾸미기 버튼 (굵게 · 크기 · 색 · 형광펜) — '본문' 글자 옆
+        self.rich = RichToolbar(content_head, self.content_text)
+        self.rich.pack(side="left", padx=(12, 0))
         tk.Label(right, fg=T.MUTED, bg=T.BG, font=T.font(8), justify="left", wraplength=460,
                 text="'✍ 본문 초안'으로 뼈대를 채운 뒤 내 말로 다듬어 주세요. 원문을 그대로 옮기면 "
                      "저작권 문제가 생기고 애드센스 심사에도 불리합니다."
@@ -318,6 +322,7 @@ class EditDialog:
             self.manual_box.pack_forget()
             self.lbl_link.pack(side="left", fill="x", expand=True)
             self.lbl_link.config(text=link)
+        self.rich.editable()            # 미리보기 중이면 풀어야 글을 바꿔 넣을 수 있다
         self.content_text.delete("1.0", "end")
         self.content_text.insert("1.0", data.get("content", ""))
         self._render_thumb(data["image"])
@@ -580,6 +585,7 @@ class EditDialog:
         self.kw_var.set(data.get("keywords", ""))
         self.benefit_picker.set_slug(data.get("benefit", ""))
         self.always_var.set(bool(data.get("always")))
+        self.rich.editable()            # 미리보기 중이면 풀어야 글을 바꿔 넣을 수 있다
         self.content_text.delete("1.0", "end")
         self.content_text.insert("1.0", data.get("content", ""))
         self._render_thumb(data["image"])

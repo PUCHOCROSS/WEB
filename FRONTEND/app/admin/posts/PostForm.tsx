@@ -4,6 +4,7 @@ import Link from "next/link";
 import { startTransition, useActionState, useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import { BENEFITS, guessBenefit } from "../../../lib/benefits";
 import { HIGHLIGHTS } from "../../../lib/highlight";
+import RichEditor from "./RichEditor";
 import { savePost, uploadImage, type SaveState } from "./actions";
 
 export type PostFormValues = {
@@ -153,9 +154,13 @@ export default function PostForm({
           </p>
         )}
 
-        <Field label="본문" hint="상세 페이지에 그대로 보여요. 혜택 · 기간 · 참여 방법을 내 말로 정리하면 검색에 유리합니다.">
-          <textarea name="content" defaultValue={initial.content} rows={14} className={`${field} leading-[1.7]`} />
-        </Field>
+        <div>
+          <span className="mb-1.5 block text-[13.5px] font-bold text-ink/85">본문</span>
+          <RichEditor name="content" defaultValue={initial.content} rows={14} />
+          <span className="mt-1 block text-[12.5px] text-muted">
+            글자를 고르고 위 버튼을 누르면 굵게 · 크기 · 색 · 형광펜이 들어가요. 혜택 · 기간 · 참여 방법을 내 말로 정리하면 검색에 유리합니다.
+          </span>
+        </div>
       </div>
 
       {/* ── 오른쪽: 설정 ── */}

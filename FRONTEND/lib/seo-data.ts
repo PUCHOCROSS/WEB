@@ -1,6 +1,7 @@
 // lib/seo-data.ts — sitemap.xml · rss.xml 이 쓰는 데이터 연결 파일
 // 행사 목록은 lib/deals.ts 의 listDeals(), 카테고리는 lib/categoryStore.ts 의 getCategories() 를 그대로 씁니다.
 import { listDeals } from "./deals";
+import { stripRich } from "./richText";
 import { getCategories } from "./categoryStore";
 import { dealPeriod } from "./period";
 
@@ -30,7 +31,7 @@ export async function getAllDeals(): Promise<SeoDeal[]> {
       .map((d) => ({
         id: d.id,
         title: d.title,
-        summary: d.content,
+        summary: stripRich(d.content),
         createdAt: d.publishedAt,
         updatedAt: d.publishedAt,
       }));

@@ -12,6 +12,8 @@ import { isExternalLink } from "../../../lib/deals";
 import { dealPeriod, periodStatus } from "../../../lib/period";
 import { benefitOf, dealBadge } from "../../../lib/benefits";
 import { highlightOf } from "../../../lib/highlight";
+import { stripRich } from "../../../lib/richText";
+import RichText from "../../../components/RichText";
 import PeriodBadge, { periodLong } from "../../../components/PeriodBadge";
 import CategoryIcon from "../../../components/CategoryIcon";
 import Thumb from "../../../components/Thumb";
@@ -62,7 +64,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // [SEO] 제목에 기간을 붙이면 "유플투쁠 11월" 같은 검색어에 더 잘 걸림
   const title = when ? `${deal.title} (${when})` : deal.always ? `${deal.title} (상시)` : deal.title;
   const description =
-    cleanText(`${when ? `행사 기간 ${when}. ` : ""}${deal.content ?? ""}`) ||
+    cleanText(`${when ? `행사 기간 ${when}. ` : ""}${stripRich(deal.content)}`) ||
     `${deal.source || "원문"}에서 모아 온 쿠폰·행사 소식입니다.`;
   const url = `/deal/${deal.id}`;
 
@@ -134,7 +136,7 @@ export default async function DealDetailPage({ params }: Props) {
       "@context": "https://schema.org",
       "@type": "Event",
       name: deal.title,
-      description: cleanText(deal.content ?? deal.title, 300),
+      description: cleanText(stripRich(deal.content) || deal.title, 300),
       startDate: period.start,
       endDate: period.end || period.start,
       eventStatus: "https://schema.org/EventScheduled",
@@ -237,7 +239,7 @@ export default async function DealDetailPage({ params }: Props) {
 
             <div className="mt-7 border-t border-rule pt-6">
               {deal.content ? (
-                <div className="whitespace-pre-wrap text-[16px] leading-[1.85] text-ink/90">{deal.content}</div>
+                <RichText text={deal.content} className="text-[16px] leading-[1.85] text-ink/90" />
               ) : (
                 <p className="text-[15px] text-muted">아직 정리된 내용이 없어요. 아래 버튼으로 원문을 확인해 주세요.</p>
               )}

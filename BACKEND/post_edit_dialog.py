@@ -19,6 +19,7 @@ from date_picker import PeriodInput, parse_day
 from enrich import WRITE_MARK, extract_period, fetch_draft
 from publisher import clean_keywords, guess_benefit, publish_manual, run_async, site_url, update_published
 from store import STORE
+from rich_text import RichToolbar
 from theme import FlatButton
 
 THUMB_W, THUMB_H = 240, 136
@@ -179,6 +180,11 @@ class PostEditDialog:
         sb.pack(side="left", fill="y")
         self.text.insert("1.0", self.item.get("content") or "")
         self.text.edit_reset()
+        # 꾸미기 버튼 (굵게 · 크기 · 색 · 형광펜) — 본문 칸 바로 위
+        bar = tk.Frame(body, bg=T.BG)
+        bar.pack(fill="x", pady=(0, 4), before=wrap)
+        self.rich = RichToolbar(bar, self.text)
+        self.rich.pack(side="left")
 
     def _suggest_benefit(self):
         """새 글: 혜택 유형을 아직 안 골랐으면 제목에서 추천해 채운다"""
@@ -314,6 +320,7 @@ class PostEditDialog:
             if not ok or not got.get("content"):
                 self.lbl_msg.config(text="원문에서 초안을 만들 내용을 찾지 못했습니다.", fg=T.AMBER)
                 return
+            self.rich.editable()
             self.text.edit_separator()
             self.text.delete("1.0", "end")
             self.text.insert("1.0", got["content"])
