@@ -4,6 +4,8 @@ import Link from "next/link";
 import { startTransition, useActionState, useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import { BENEFITS, guessBenefit } from "../../../lib/benefits";
 import { HIGHLIGHTS } from "../../../lib/highlight";
+import { buildOcrDraft, type ImageDraft } from "../../../lib/ocrDraft";
+import { ocrInBrowser } from "../_ui/ocrClient";
 import { shrink } from "../_ui/shrink";
 import RichEditor from "./RichEditor";
 import { draftFromImageAction, savePost, uploadImage, type SaveState } from "./actions";
@@ -32,9 +34,12 @@ const field =
 export default function PostForm({
   initial,
   categories,
+  hasAi = false,
 }: {
   initial: PostFormValues;
   categories: { slug: string; label: string }[];
+  /** Vercel 에 ANTHROPIC_API_KEY 가 있으면 AI, 없으면 이 브라우저에서 무료 글자 인식 */
+  hasAi?: boolean;
 }) {
   const isNew = !initial.id;
   const [state, action, pending] = useActionState<SaveState, FormData>(savePost, null);
@@ -69,15 +74,30 @@ export default function PostForm({
     setDrafting(true);
     setDraftNote(null);
     try {
-      const fd = new FormData();
-      if (lastFile.current?.url === image) fd.append("file", lastFile.current.file, "image");
-      else fd.append("url", image);
-      const res = await draftFromImageAction(fd);
-      if ("error" in res) {
-        setDraftNote({ ok: false, text: res.error });
-        return;
+      let d: ImageDraft;
+      if (hasAi) {
+        const fd = new FormData();
+        if (lastFile.current?.url === image) fd.append("file", lastFile.current.file, "image");
+        else fd.append("url", image);
+        const res = await draftFromImageAction(fd);
+        if ("error" in res) {
+          setDraftNote({ ok: false, text: res.error });
+          return;
+        }
+        d = res.draft;
+      } else {
+        // 무료 글자 인식: 이 브라우저 안에서 읽고 초안까지 만든다 (서버 시간 제한 없음)
+        const blob =
+          lastFile.current?.url === image
+            ? lastFile.current.file
+            : await fetch(image).then((r) => (r.ok ? r.blob() : Promise.reject(new Error("이미지를 불러오지 못했어요"))));
+        const built = buildOcrDraft(await ocrInBrowser(blob, true));
+        if (!built) {
+          setDraftNote({ ok: false, text: "이미지에서 글자를 찾지 못했어요. 글자가 크게 보이게 다시 캡처해 주세요." });
+          return;
+        }
+        d = built;
       }
-      const d = res.draft;
       const cur = Object.fromEntries(new FormData(formRef.current!)) as Record<string, string>;
       const filled = Boolean(title.trim() || (cur.content ?? "").trim());
       const replace = !filled || window.confirm("지금 쓴 제목 · 본문을 이미지로 만든 초안으로 바꿀까요?\n[취소]를 누르면 빈 칸만 채웁니다.");
@@ -98,8 +118,12 @@ export default function PostForm({
       });
       setDraftKey((k) => k + 1);
       setDraftNote({ ok: true, text: d.note, ocr: d.text });
-    } catch {
-      setDraftNote({ ok: false, text: "이미지를 분석하지 못했습니다. 잠시 후 다시 시도해 주세요." });
+    } catch (e) {
+      console.error("[draft]", e);
+      setDraftNote({
+        ok: false,
+        text: `이미지를 분석하지 못했습니다. 새로고침 후 다시 해 주세요. (${String(e instanceof Error ? e.message : e).slice(0, 80)})`,
+      });
     } finally {
       setDrafting(false);
     }
@@ -342,7 +366,7 @@ export default function PostForm({
             disabled={drafting || uploading}
             className="w-full rounded-full bg-[#7C3AED] py-2.5 text-[14px] font-bold text-white transition-colors hover:bg-[#6D28D9] disabled:opacity-60"
           >
-            {drafting ? "이미지 읽는 중... (10~30초)" : "🪄 이 이미지로 글쓰기"}
+            {drafting ? (hasAi ? "AI 가 읽는 중... (10~30초)" : "글자 읽는 중... (처음엔 10초쯤)") : "🪄 이 이미지로 글쓰기"}
           </button>
           {draftNote && (
             <div

@@ -5,26 +5,13 @@
 //
 // 관리자 화면(서버 액션)과 Work Hub(/api/draft) 가 함께 씁니다. 서버에서만 실행됩니다.
 import path from "node:path";
-import { BENEFITS, guessBenefit, isBenefit } from "./benefits";
+import { BENEFITS, isBenefit } from "./benefits";
 import type { Category } from "./categories";
 import { MAX_IMAGE_BYTES, sniffImage } from "./imageStore";
-import { isDay, kstToday, parsePeriod } from "./period";
+import { buildOcrDraft, tidyTranscript, type ImageDraft } from "./ocrDraft";
+import { isDay, kstToday } from "./period";
 
-export type ImageDraft = {
-  mode: "ai" | "ocr";
-  title: string;
-  content: string;
-  startsOn: string;
-  endsOn: string;
-  benefit: string;
-  keywords: string;
-  category: string;
-  always: boolean;
-  /** OCR 일 때 읽은 글자 그대로 (확인용) */
-  text?: string;
-  /** 사용자에게 보여 줄 한 줄 안내 */
-  note: string;
-};
+export type { ImageDraft };
 
 export class DraftError extends Error {}
 
@@ -52,8 +39,12 @@ export async function draftFromImage(bytes: Uint8Array, cats: Category[]): Promi
       return await aiDraft(bytes, mime, cats);
     } catch (e) {
       console.error("[imageDraft] AI 분석 실패, 글자 인식으로 대신합니다:", e);
-      const d = await ocrDraft(bytes);
-      return { ...d, note: `AI 분석이 실패해 글자 인식으로 만들었어요. (${shortErr(e)})` };
+      try {
+        const d = await ocrDraft(bytes);
+        return { ...d, note: `AI 분석이 실패해 글자 인식으로 만들었어요. (${shortErr(e)})` };
+      } catch {
+        throw new DraftError(`AI 분석이 실패했어요. 잠시 후 다시 해 주세요. (${shortErr(e)})`);
+      }
     }
   }
   return ocrDraft(bytes);
@@ -191,13 +182,7 @@ export async function aiTranscribe(bytes: Uint8Array): Promise<string> {
 /** 무료 글자 인식 결과 정리 (도구 > 이미지 → 텍스트) */
 export async function ocrTranscribe(bytes: Uint8Array): Promise<string> {
   if (!sniffImage(bytes)) throw new DraftError("JPG, PNG, WEBP, GIF 이미지만 읽을 수 있습니다.");
-  const raw = await readText(bytes, false);
-  return raw
-    .split("\n")
-    .map((l) => l.replace(/[ \t]+/g, " ").replace(/\b([1-9]\d?)\s?96\b/g, "$1%").trim())
-    .join("\n")
-    .replace(/\n{2,}/g, "\n") // 줄마다 끼는 빈 줄 없애기
-    .trim();
+  return tidyTranscript(await readText(bytes, false));
 }
 
 // ── 2) 무료 글자 인식 (OCR) ────────────────────────────────────────────────
@@ -216,24 +201,6 @@ export async function readText(bytes: Uint8Array, sparse = true): Promise<string
   }
 }
 
-/** OCR 글자 다듬기: 빈 줄 · 의미 없는 조각 빼기, 흔한 오인식 바로잡기 */
-export function cleanOcr(raw: string): string[] {
-  return raw
-    .split(/\n/)
-    .map((l) =>
-      l
-        .replace(/\s+/g, " ")
-        .replace(/\b([1-9]\d?)\s?96\b/g, "$1%") // '%' 를 '96' 으로 읽는 경우가 많다 (50% → 5096)
-        .replace(/(\d) ?\( ?([월화수목금토일]) ?\)/g, "$1($2)")
-        .trim(),
-    )
-    // 한글 두 글자 이상이 있거나, 숫자에 % · 원 · 날짜가 붙은 줄만 (096 같은 조각은 버림)
-    .filter((l) => /[가-힣]{2,}|\d\s*(%|원|[./]\s*\d)/.test(l) && (l.match(/[가-힣A-Za-z0-9%]/g)?.length ?? 0) >= l.length * 0.5);
-}
-
-const CAUTION = /한도|제한|유의|불가|제외|소진|선착순|1인|인당|최대|조건|미만|이상 결제/;
-const DATE_LINE = /\d{1,2}\s*[./월]\s*\d{1,2}/;
-
 async function ocrDraft(bytes: Uint8Array): Promise<ImageDraft> {
   let raw = "";
   try {
@@ -242,39 +209,7 @@ async function ocrDraft(bytes: Uint8Array): Promise<ImageDraft> {
     console.error("[imageDraft] 글자 인식 실패:", e);
     throw new DraftError("이미지에서 글자를 읽지 못했습니다.");
   }
-  const lines = cleanOcr(raw);
-  if (lines.length === 0) throw new DraftError("이미지에서 글자를 찾지 못했습니다. 글자가 크게 보이게 다시 캡처해 주세요.");
-  const text = lines.join("\n");
-  const today = kstToday();
-  const p = parsePeriod(text, today);
-  const dateLines = lines.filter((l) => DATE_LINE.test(l));
-  const cautions = lines.filter((l) => !dateLines.includes(l) && CAUTION.test(l));
-  const main = lines.filter((l) => !dateLines.includes(l) && !cautions.includes(l));
-  // 제목: 혜택 단어가 든 줄을 우선, 없으면 앞 두 줄
-  const strong = main.filter((l) => /%|원|적립|할인|쿠폰|증정|무료|1\+1|이벤트|페스타/.test(l));
-  const title = (strong.length ? strong.slice(0, 2) : main.slice(0, 2)).join(" ").slice(0, 60);
-
-  const out: string[] = ["[크게]📌 한눈에 보기[/크게]", "✍ (직접 작성) 이미지에서 읽은 글자로 만든 초안이에요. 내 말로 한두 문장 요약해 주세요.", ""];
-  if (main.length) out.push("[굵게]✅ 혜택[/굵게]", ...main.map((l) => `- ${l}`), "");
-  if (p.start || p.end || dateLines.length) {
-    const when = p.start || p.end ? `${p.start ?? ""} ~ ${p.end ?? ""}`.trim() : dateLines[0];
-    out.push("[굵게]📅 기간[/굵게]", `- [형광]${when}[/형광]`, "");
-  }
-  if (cautions.length) out.push("[굵게]⚠️ 유의사항[/굵게]", ...cautions.map((l) => `- ${l}`), "");
-
-  return {
-    mode: "ocr",
-    title,
-    content: out.join("\n").trim(),
-    startsOn: p.start ?? "",
-    endsOn: p.end ?? "",
-    benefit: guessBenefit(text),
-    category: "",
-    always: false,
-    keywords: "",
-    text,
-    note: process.env.ANTHROPIC_API_KEY
-      ? "글자 인식으로 만든 초안이에요."
-      : "무료 글자 인식으로 만든 초안이에요. 틀린 글자가 있을 수 있으니 꼭 확인해 주세요. (AI 를 쓰려면 ANTHROPIC_API_KEY 설정)",
-  };
+  const d = buildOcrDraft(raw, Boolean(process.env.ANTHROPIC_API_KEY));
+  if (!d) throw new DraftError("이미지에서 글자를 찾지 못했습니다. 글자가 크게 보이게 다시 캡처해 주세요.");
+  return d;
 }

@@ -1,6 +1,8 @@
 "use client";
 // 이미지 → 텍스트: 붙여넣기(Ctrl+V) · 끌어다 놓기 · 파일 고르기 → 글자 뽑기 → 복사 / 저장
 import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { tidyTranscript } from "../../../../lib/ocrDraft";
+import { ocrInBrowser } from "../../_ui/ocrClient";
 import { shrink } from "../../_ui/shrink";
 import { extractText } from "./actions";
 
@@ -15,22 +17,6 @@ type Item = {
 };
 
 let seq = 0;
-
-/** 작은 캡처는 2배로 키워서 보내면 무료 글자 인식이 더 잘 읽는다 */
-async function enlarge(file: File): Promise<File> {
-  const bm = await createImageBitmap(file).catch(() => null);
-  if (!bm || Math.max(bm.width, bm.height) >= 1200) return file;
-  const c = document.createElement("canvas");
-  c.width = bm.width * 2;
-  c.height = bm.height * 2;
-  const g = c.getContext("2d")!;
-  g.fillStyle = "#ffffff";
-  g.fillRect(0, 0, c.width, c.height);
-  g.imageSmoothingQuality = "high";
-  g.drawImage(bm, 0, 0, c.width, c.height);
-  const blob = await new Promise<Blob | null>((r) => c.toBlob(r, "image/png"));
-  return blob && blob.size < 3_000_000 ? new File([blob], "x2.png", { type: "image/png" }) : file;
-}
 
 export default function OcrTool({ hasAi }: { hasAi: boolean }) {
   const [items, setItems] = useState<Item[]>([]);
@@ -77,15 +63,28 @@ export default function OcrTool({ hasAi }: { hasAi: boolean }) {
     for (const it of items.filter((i) => i.status === "wait" || i.status === "error")) {
       patch(it.id, { status: "work", error: undefined });
       try {
-        const fd = new FormData();
-        const small = mode === "ocr" ? await enlarge(await shrink(it.file, 3200)) : await shrink(it.file, 3200); // 작은 글씨가 뭉개지지 않게 크게 둔다
-        fd.append("file", small, small.name);
-        fd.append("mode", mode);
-        const res = await extractText(fd);
-        if ("error" in res) patch(it.id, { status: "error", error: res.error });
-        else patch(it.id, { status: "done", text: res.text || "(글자를 찾지 못했어요)" });
-      } catch {
-        patch(it.id, { status: "error", error: "연결이 끊겼어요. 다시 눌러 주세요." });
+        if (mode === "ocr") {
+          // 무료 글자 인식은 이 브라우저 안에서 (서버를 거치지 않음)
+          const text = tidyTranscript(await ocrInBrowser(it.file));
+          patch(it.id, { status: "done", text: text || "(글자를 찾지 못했어요)" });
+        } else {
+          const fd = new FormData();
+          const small = await shrink(it.file, 3200); // 작은 글씨가 뭉개지지 않게 크게 둔다
+          fd.append("file", small, small.name);
+          fd.append("mode", mode);
+          const res = await extractText(fd);
+          if ("error" in res) patch(it.id, { status: "error", error: res.error });
+          else patch(it.id, { status: "done", text: res.text || "(글자를 찾지 못했어요)" });
+        }
+      } catch (e) {
+        console.error("[ocr]", e);
+        patch(it.id, {
+          status: "error",
+          error:
+            mode === "ocr"
+              ? `글자 인식 준비에 실패했어요. 새로고침 후 다시 해 주세요. (${String(e instanceof Error ? e.message : e).slice(0, 80)})`
+              : "서버 응답이 끊겼어요. 잠시 후 다시 눌러 주세요.",
+        });
       }
     }
     setRunning(false);
@@ -273,7 +272,7 @@ export default function OcrTool({ hasAi }: { hasAi: boolean }) {
                 <textarea
                   value={it.text}
                   onChange={(e) => patch(it.id, { text: e.target.value })}
-                  placeholder={it.status === "work" ? "글자를 읽고 있어요…" : "‘글자 뽑기’를 누르면 여기에 나와요. 고쳐 써도 됩니다."}
+                  placeholder={it.status === "work" ? (mode === "ocr" ? "글자를 읽고 있어요… (처음 한 번은 준비에 5~10초)" : "글자를 읽고 있어요…") : "‘글자 뽑기’를 누르면 여기에 나와요. 고쳐 써도 됩니다."}
                   rows={Math.min(16, Math.max(6, it.text.split("\n").length + 1))}
                   className="w-full flex-1 resize-y rounded-xl border border-rule bg-white px-3.5 py-2.5 text-[14.5px] leading-[1.7] focus:border-[#7C3AED] focus:outline-none"
                 />
