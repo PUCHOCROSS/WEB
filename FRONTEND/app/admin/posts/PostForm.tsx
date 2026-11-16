@@ -5,7 +5,7 @@ import { startTransition, useActionState, useEffect, useEffectEvent, useRef, use
 import { BENEFITS, guessBenefit } from "../../../lib/benefits";
 import { HIGHLIGHTS } from "../../../lib/highlight";
 import RichEditor from "./RichEditor";
-import { savePost, uploadImage, type SaveState } from "./actions";
+import { draftFromImageAction, savePost, uploadImage, type SaveState } from "./actions";
 
 export type PostFormValues = {
   id?: string;
@@ -60,6 +60,68 @@ export default function PostForm({
   const [always, setAlways] = useState(initial.always);
   const [highlight, setHighlight] = useState(initial.highlight);
   const fileRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  const lastFile = useRef<{ url: string; file: Blob } | null>(null); // 방금 올린 이미지 (다시 내려받지 않게)
+  // 이미지로 글쓰기 결과를 칸에 넣을 때: 값(vals)을 바꾸고 key 를 바꿔 칸을 새로 그린다
+  const [vals, setVals] = useState({
+    content: initial.content,
+    category: initial.category,
+    startsOn: initial.startsOn,
+    endsOn: initial.endsOn,
+    keywords: initial.keywords,
+  });
+  const [draftKey, setDraftKey] = useState(0);
+  const [drafting, setDrafting] = useState(false);
+  const [draftNote, setDraftNote] = useState<{ ok: boolean; text: string; ocr?: string } | null>(null);
+
+  const makeDraft = async () => {
+    if (!image) {
+      setDraftNote({ ok: false, text: "먼저 대표 이미지를 넣어 주세요. (✂ 캡처 붙여넣기 · 🖼 내 이미지)" });
+      return;
+    }
+    setDrafting(true);
+    setDraftNote(null);
+    try {
+      const fd = new FormData();
+      if (lastFile.current?.url === image) fd.append("file", lastFile.current.file, "image");
+      else fd.append("url", image);
+      const res = await draftFromImageAction(fd);
+      if ("error" in res) {
+        setDraftNote({ ok: false, text: res.error });
+        return;
+      }
+      const d = res.draft;
+      const cur = Object.fromEntries(new FormData(formRef.current!)) as Record<string, string>;
+      const filled = Boolean(title.trim() || (cur.content ?? "").trim());
+      const replace = !filled || window.confirm("지금 쓴 제목 · 본문을 이미지로 만든 초안으로 바꿀까요?\n[취소]를 누르면 빈 칸만 채웁니다.");
+      const pick = (now: string, next: string) => (next && (replace || !now.trim()) ? next : now);
+      if (d.title) onTitleFromDraft(pick(title, d.title));
+      if (d.benefit && (replace || !benefit)) {
+        setBenefit(d.benefit);
+        setBenefitTouched(true);
+      }
+      if (d.always && (replace || !always)) setAlways(true);
+      setVals({
+        content: pick(cur.content ?? "", d.content),
+        category: pick(cur.category ?? "", d.category),
+        startsOn: pick(cur.startsOn ?? "", d.startsOn),
+        endsOn: pick(cur.endsOn ?? "", d.endsOn),
+        // 키워드는 바꾸지 않고 합친다
+        keywords: [...new Set([...(cur.keywords ?? "").split(","), ...d.keywords.split(",")].map((k) => k.trim()).filter(Boolean))].join(", "),
+      });
+      setDraftKey((k) => k + 1);
+      setDraftNote({ ok: true, text: d.note, ocr: d.text });
+    } catch {
+      setDraftNote({ ok: false, text: "이미지를 분석하지 못했습니다. 잠시 후 다시 시도해 주세요." });
+    } finally {
+      setDrafting(false);
+    }
+  };
+
+  const onTitleFromDraft = (v: string) => {
+    setTitle(v);
+    if (!benefitTouched) setBenefit(guessBenefit(v));
+  };
 
   const onTitle = (v: string) => {
     setTitle(v);
@@ -75,7 +137,10 @@ export default function PostForm({
       const f = file instanceof File ? file : new File([file], "capture.png", { type: file.type || "image/png" });
       fd.append("file", await shrink(f), f.name);
       const res = await uploadImage(fd);
-      if ("url" in res) setImage(res.url);
+      if ("url" in res) {
+        setImage(res.url);
+        lastFile.current = { url: res.url, file: f };
+      }
       else setUploadError(res.error);
     } catch {
       setUploadError("이미지를 올리지 못했습니다. 4MB 이하의 JPG · PNG · WEBP · GIF 인지 확인하세요.");
@@ -114,6 +179,7 @@ export default function PostForm({
 
   return (
     <form
+      ref={formRef}
       // action={...} 로 넘기면 React 가 제출 뒤 입력 칸을 비워서, 저장에 실패하면 쓴 본문이 사라진다.
       // 그래서 직접 보내고 칸은 그대로 둔다.
       onSubmit={(e) => {
@@ -156,7 +222,7 @@ export default function PostForm({
 
         <div>
           <span className="mb-1.5 block text-[13.5px] font-bold text-ink/85">본문</span>
-          <RichEditor name="content" defaultValue={initial.content} rows={14} />
+          <RichEditor key={`content-${draftKey}`} name="content" defaultValue={vals.content} rows={14} />
           <span className="mt-1 block text-[12.5px] text-muted">
             글자를 고르고 위 버튼을 누르면 굵게 · 크기 · 색 · 형광펜이 들어가요. 혜택 · 기간 · 참여 방법을 내 말로 정리하면 검색에 유리합니다.
           </span>
@@ -167,7 +233,7 @@ export default function PostForm({
       <div className="space-y-4 lg:sticky lg:top-20">
         <div className="card space-y-4 p-5">
           <Field label="카테고리">
-            <select name="category" defaultValue={initial.category} className={field}>
+            <select key={`cat-${draftKey}`} name="category" defaultValue={vals.category} className={field}>
               <option value="">자동 (제목으로 분류)</option>
               {categories.map((c) => (
                 <option key={c.slug} value={c.slug}>
@@ -198,8 +264,8 @@ export default function PostForm({
 
           <Field label="행사 기간" hint={always ? "상시 혜택은 기간을 비워 두면 '상시'로 보여요." : "종료일만 알면 시작일은 비워 두세요."}>
             <div className="grid grid-cols-2 gap-2">
-              <input type="date" name="startsOn" defaultValue={initial.startsOn} aria-label="시작일" className={field} />
-              <input type="date" name="endsOn" defaultValue={initial.endsOn} aria-label="종료일" className={field} />
+              <input key={`s-${draftKey}`} type="date" name="startsOn" defaultValue={vals.startsOn} aria-label="시작일" className={field} />
+              <input key={`e-${draftKey}`} type="date" name="endsOn" defaultValue={vals.endsOn} aria-label="종료일" className={field} />
             </div>
           </Field>
 
@@ -247,7 +313,7 @@ export default function PostForm({
           </div>
 
           <Field label="검색 키워드" hint="쉼표로 구분. 제목에 없는 말로도 검색돼요. 예) 스벅, 커피">
-            <input name="keywords" defaultValue={initial.keywords} className={field} />
+            <input key={`kw-${draftKey}`} name="keywords" defaultValue={vals.keywords} className={field} />
           </Field>
         </div>
 
@@ -287,6 +353,29 @@ export default function PostForm({
           </div>
           <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp,image/gif" className="hidden" onChange={(e) => onFile(e.target.files?.[0])} />
           {uploadError && <p className="text-[13px] text-[#C62828]">{uploadError}</p>}
+          <button
+            type="button"
+            onClick={makeDraft}
+            disabled={drafting || uploading}
+            className="w-full rounded-full bg-[#7C3AED] py-2.5 text-[14px] font-bold text-white transition-colors hover:bg-[#6D28D9] disabled:opacity-60"
+          >
+            {drafting ? "이미지 읽는 중... (10~30초)" : "🪄 이 이미지로 글쓰기"}
+          </button>
+          {draftNote && (
+            <div
+              className={`rounded-xl px-3 py-2 text-[12.5px] leading-relaxed ${
+                draftNote.ok ? "bg-[#F3EEFF] text-[#5B21B6]" : "bg-[#FDECEC] text-[#C62828]"
+              }`}
+            >
+              {draftNote.text}
+              {draftNote.ocr && (
+                <details className="mt-1">
+                  <summary className="cursor-pointer font-semibold">읽은 글자 보기</summary>
+                  <pre className="mt-1 whitespace-pre-wrap font-sans text-ink/70">{draftNote.ocr}</pre>
+                </details>
+              )}
+            </div>
+          )}
           <p className="text-[12px] leading-relaxed text-muted">
             <b className="text-ink/75">캡처로 올리기:</b> Win+Shift+S 로 화면 일부를 캡처한 뒤 이 화면에서 Ctrl+V.
             브랜드 배너·로고가 크게 나온 캡처는 피하고, 쿠폰 내용이 보이는 부분만 잘라 주세요.

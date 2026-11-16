@@ -323,7 +323,11 @@ class PagePosts(ttk.Frame):
 
         def got(img):
             dlg = PostEditDialog(self, {}, on_saved=lambda _id, _f: self.reload(), new=True)
-            upload_pil(dlg.dlg, img, dlg.set_image, button=dlg.btn_capture)
+
+            def uploaded(url):                  # 올리고 나면 바로 🪄 이미지로 글쓰기
+                dlg.set_image(url)
+                dlg.image_draft()
+            upload_pil(dlg.dlg, img, uploaded, button=dlg.btn_capture)
         capture_region(self, got)
 
     def bulk_import(self):

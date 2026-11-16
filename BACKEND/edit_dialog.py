@@ -25,6 +25,7 @@ from category_service import BenefitPicker, CategoryPicker, HighlightPicker, pic
 from date_picker import PeriodInput
 from enrich import WRITE_MARK, extract_period, fetch_draft, valid_day
 from publisher import guess_benefit
+from image_draft import ask_replace, merge_keywords, note_of, request_draft
 from rich_text import RichToolbar
 from theme import FlatButton
 
@@ -234,6 +235,9 @@ class EditDialog:
         self.btn_draft = FlatButton(content_head, self.DRAFT_LABEL, kind="ghost", command=self._make_draft)
         self.btn_draft.config(padx=10, pady=2)
         self.btn_draft.pack(side="right")
+        self.btn_imgdraft = FlatButton(content_head, "🪄 이미지로", kind="primary", command=self._image_draft)
+        self.btn_imgdraft.config(padx=10, pady=2)
+        self.btn_imgdraft.pack(side="right", padx=(0, 6))
         text_wrap = tk.Frame(right, bg=T.BG)
         text_wrap.pack(fill="both", expand=True)
         self.content_text = tk.Text(text_wrap, height=7, font=T.font(10), bg=T.FIELD, fg=T.TEXT,
@@ -362,6 +366,36 @@ class EditDialog:
         """고른 강조 색을 썸네일 테두리로 미리 보여 준다 (홈페이지 카드와 같은 색)"""
         color = {"hot": "#F04452", "pick": "#16A35A"}.get(self.hl_picker.get_slug())
         self.thumb_canvas.config(highlightthickness=3 if color else 1, highlightbackground=color or T.BORDER)
+
+    def _image_draft(self):
+        """지금 항목의 대표 이미지를 분석해 빈 칸(또는 전부)을 채운다"""
+        self._save_current(render_thumb=False)
+        link = self._current_link
+        if link is None:
+            return
+
+        def apply(d):
+            if not self._alive() or link not in self.overrides:
+                return
+            if self._current_link == link:
+                self._save_current(render_thumb=False)
+            data = self.overrides[link]
+            replace = ask_replace(self.dlg, bool(data.get("content")))
+            for key, field in (("title", "title"), ("content", "content"), ("start", "startsOn"),
+                               ("end", "endsOn"), ("benefit", "benefit"), ("category", "category")):
+                value = d.get(field)
+                if value and (replace or not str(data.get(key) or "").strip()):
+                    data[key] = value
+            if d.get("always"):
+                data["always"] = True
+            data["keywords"] = merge_keywords(data.get("keywords"), d.get("keywords"))
+            if self._current_link == link:                 # 화면에 다시 그리기
+                self._current_link = None
+                self._apply_selection(self._current_idx)
+            self._update_tree_row(self.rows.index(next(r for r in self.rows if str(r[3]) == link)), data)
+            T.toast(self.dlg, note_of(d), "ok" if d.get("mode") == "ai" else "warn")
+
+        request_draft(self.dlg, self.image_var.get().strip(), apply, button=self.btn_imgdraft)
 
     def _set_uploaded(self, url):
         """올린 이미지 주소를 지금 보고 있는 항목에 넣는다"""

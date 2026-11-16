@@ -19,6 +19,7 @@ from date_picker import PeriodInput, parse_day
 from enrich import WRITE_MARK, extract_period, fetch_draft
 from publisher import clean_keywords, guess_benefit, publish_manual, run_async, site_url, update_published
 from store import STORE
+from image_draft import ask_replace, merge_keywords, note_of, request_draft
 from rich_text import RichToolbar
 from theme import FlatButton
 
@@ -168,6 +169,9 @@ class PostEditDialog:
                                     kind="ghost", command=self._make_draft)
         self.btn_draft.config(padx=10, pady=2)
         self.btn_draft.pack(side="right")
+        self.btn_imgdraft = FlatButton(head, "🪄 이미지로 글쓰기", kind="primary", command=self.image_draft)
+        self.btn_imgdraft.config(padx=10, pady=2)
+        self.btn_imgdraft.pack(side="right", padx=(0, 6))
 
         wrap = tk.Frame(body, bg=T.BG)
         wrap.pack(fill="both", expand=True)
@@ -185,6 +189,40 @@ class PostEditDialog:
         bar.pack(fill="x", pady=(0, 4), before=wrap)
         self.rich = RichToolbar(bar, self.text)
         self.rich.pack(side="left")
+
+    def image_draft(self):
+        """대표 이미지를 분석해 제목 · 본문 · 기간 등을 채운다"""
+        request_draft(self.dlg, self.image_var.get().strip(), self._apply_draft, button=self.btn_imgdraft)
+
+    def _apply_draft(self, d):
+        try:
+            if not self.dlg.winfo_exists():
+                return
+        except tk.TclError:
+            return
+        replace = ask_replace(self.dlg, bool(self.title_var.get().strip() or self._content()))
+
+        def pick(var, value):
+            if value and (replace or not var.get().strip()):
+                var.set(value)
+        pick(self.title_var, d.get("title"))
+        if d.get("content") and (replace or not self._content()):
+            self.rich.editable()
+            self.text.edit_separator()
+            self.text.delete("1.0", "end")
+            self.text.insert("1.0", d["content"])
+            self.text.edit_separator()
+        pick(self.start_var, d.get("startsOn"))
+        pick(self.end_var, d.get("endsOn"))
+        if d.get("benefit") and (replace or not self.benefit_picker.get_slug()):
+            self.benefit_picker.set_slug(d["benefit"])
+        if d.get("category") and (replace or not self.cat_picker.get_slug()):
+            self.cat_picker.set_slug(d["category"])
+        if d.get("always"):
+            self.always_var.set(True)
+        self.kw_var.set(merge_keywords(self.kw_var.get(), d.get("keywords")))
+        self.cat_picker.refresh()
+        self.lbl_msg.config(text=note_of(d)[:90], fg=T.GREEN if d.get("mode") == "ai" else T.AMBER)
 
     def _suggest_benefit(self):
         """새 글: 혜택 유형을 아직 안 골랐으면 제목에서 추천해 채운다"""

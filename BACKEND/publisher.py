@@ -207,7 +207,7 @@ def _http_message(code, detail, location=""):
     return f"서버 오류 ({code}): {detail}" if detail else f"서버 오류 ({code})"
 
 
-def _request(url, token, payload, method="POST"):
+def _request(url, token, payload, method="POST", timeout=TIMEOUT):
     data = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
     req = urllib.request.Request(url, data=data, method=method, headers={
         "Authorization": f"Bearer {token}",
@@ -215,7 +215,7 @@ def _request(url, token, payload, method="POST"):
         "User-Agent": "WorkHub-Publisher/1.0",
     })
     try:
-        with _OPENER.open(req, timeout=TIMEOUT) as resp:
+        with _OPENER.open(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8", "replace")
     except urllib.error.HTTPError as e:
         detail = ""
@@ -314,6 +314,21 @@ def publish_manual(base_url, token, fields):
     if not res["inserted"]:
         raise PublishError("같은 원문 주소로 이미 발행한 글이 있습니다. Posts 목록에서 그 글을 수정하세요.")
     return (res.get("created") or [{}])[0].get("id", "")
+
+
+# ── 이미지로 글쓰기 ───────────────────────────────────────────────────────
+def draft_from_image(base_url, token, image_url):
+    """홈페이지에 올린 이미지를 분석해 글 초안을 받는다.
+    돌려주는 dict: mode('ai'|'ocr'), title, content, startsOn, endsOn, benefit, category, always, keywords, note, text(OCR 때)
+    홈페이지에 ANTHROPIC_API_KEY 가 있으면 AI, 없으면 무료 글자 인식으로 만든다."""
+    url = normalize_endpoint(base_url)[: -len(API_PATH)] + "/api/draft"
+    try:
+        res = _request(url, _check_token(token), {"url": image_url}, timeout=90)
+    except PublishError as e:
+        if "404" in str(e) or "찾을 수 없" in str(e):
+            raise PublishError("홈페이지에 '이미지로 글쓰기' 기능이 아직 없습니다. 홈페이지 코드를 최신으로 배포하세요.") from None
+        raise
+    return res.get("draft") or {}
 
 
 # ── 이미지 올리기 ─────────────────────────────────────────────────────────

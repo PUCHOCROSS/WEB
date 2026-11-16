@@ -16,7 +16,9 @@ import {
   storageMode,
   updateDeal,
 } from "../../../lib/deals";
+import { DraftError, draftFromImage, fetchImage, type ImageDraft } from "../../../lib/imageDraft";
 import { MAX_IMAGE_BYTES, saveImage, sniffImage } from "../../../lib/imageStore";
+import { getCategories } from "../../../lib/categoryStore";
 import { refreshPages } from "../../../lib/refresh";
 
 async function requireAdmin() {
@@ -132,6 +134,29 @@ export async function deletePost(form: FormData) {
 }
 
 /** 대표 이미지 올리기 (폼: file). 브라우저에서 미리 줄여서 보냅니다. */
+/** 이미지로 글쓰기: 대표 이미지 주소(또는 파일)를 분석해 초안을 돌려준다 */
+export async function draftFromImageAction(form: FormData): Promise<{ draft: ImageDraft } | { error: string }> {
+  await requireAdmin();
+  try {
+    const file = form.get("file");
+    const url = String(form.get("url") ?? "").trim();
+    let bytes: Uint8Array;
+    if (file instanceof File && file.size > 0) {
+      if (file.size > MAX_IMAGE_BYTES) return { error: "이미지가 너무 큽니다. (최대 4MB)" };
+      bytes = new Uint8Array(await file.arrayBuffer());
+    } else if (url) {
+      bytes = await fetchImage(url);
+    } else {
+      return { error: "먼저 대표 이미지를 넣어 주세요. (캡처 붙여넣기 · 내 이미지 · 주소)" };
+    }
+    return { draft: await draftFromImage(bytes, await getCategories()) };
+  } catch (e) {
+    if (e instanceof DraftError) return { error: e.message };
+    console.error("[admin] 이미지로 글쓰기 실패:", e);
+    return { error: "이미지를 분석하지 못했습니다. 잠시 후 다시 시도해 주세요." };
+  }
+}
+
 export async function uploadImage(form: FormData): Promise<{ url: string } | { error: string }> {
   await requireAdmin();
   if (storageMode() === "none") return { error: NO_STORAGE };

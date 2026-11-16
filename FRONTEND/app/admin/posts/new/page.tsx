@@ -7,6 +7,7 @@ import AdminShell from "../../_ui/AdminShell";
 import PostForm from "../PostForm";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60; // 이미지로 글쓰기(AI · 글자 인식)에 시간이 걸릴 수 있음
 
 export default async function NewPost() {
   if (!(await isAdmin())) redirect("/admin/login");
