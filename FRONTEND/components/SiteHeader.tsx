@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SITE_NAME } from "../lib/site";
+import MemberButton from "./MemberButton";
 import VisitorCounter from "./VisitorCounter";
 
 function Logo() {
@@ -39,6 +40,7 @@ export default function SiteHeader({ active }: { active?: "home" | "calendar" | 
             {nav("/always", "상시 혜택", active === "always")}
           </nav>
           <VisitorCounter />
+          <MemberButton />
         </div>
       </div>
     </header>

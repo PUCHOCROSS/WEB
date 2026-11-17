@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 };
 
 // 내용을 바꾸면 시행일도 함께 바꿔 주세요.
-const EFFECTIVE_DATE = "2026년 11월 14일";
+const EFFECTIVE_DATE = "2026년 11월 17일";
 
 const linkCls = "font-semibold text-ink underline underline-offset-2";
 
@@ -24,8 +24,14 @@ export default function PrivacyPage() {
 
       <Section title="1. 수집하는 개인정보">
         <p>
-          사이트는 회원가입, 로그인, 댓글 기능이 없으며 이름·연락처 같은 개인정보를 직접 입력받지 않습니다.
+          회원가입은 카카오 로그인으로만 받으며, 가입할 때 카카오로부터 아래 정보를 제공받습니다. 이름 · 이메일 ·
+          전화번호는 받지 않습니다. 회원가입 없이도 사이트의 모든 글을 볼 수 있습니다.
         </p>
+        <ul className="list-disc pl-5 space-y-1">
+          <li>필수: 카카오 회원번호, 닉네임</li>
+          <li>선택: 프로필 사진 (동의한 경우에만)</li>
+          <li>자동 생성: 가입일, 마지막 로그인 일시, 로그인 유지를 위한 쿠키</li>
+        </ul>
         <p>다만 서비스를 이용하는 과정에서 아래 정보가 자동으로 생성되어 수집될 수 있습니다.</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>접속 IP 주소, 브라우저 종류, 운영체제, 방문 일시, 방문한 페이지 등 접속 기록</li>
@@ -39,6 +45,7 @@ export default function PrivacyPage() {
 
       <Section title="2. 이용 목적">
         <ul className="list-disc pl-5 space-y-1">
+          <li>회원 식별 및 로그인 유지, 회원 전용 기능 제공</li>
           <li>사이트 운영, 장애 대응 및 보안 (부정 이용 방지)</li>
           <li>방문자 수, 페이지 조회수 등 이용 통계 (개인을 식별하지 않는 형태로 집계)</li>
           <li>광고 게재 및 광고 효과 측정</li>
@@ -47,6 +54,10 @@ export default function PrivacyPage() {
       </Section>
 
       <Section title="3. 보유 기간 및 파기">
+        <p>
+          회원 정보는 회원 탈퇴 시까지 보관하며, 탈퇴하면 지체 없이 삭제합니다. 탈퇴는 로그인 후 &lsquo;내 정보&rsquo;
+          페이지에서 언제든지 할 수 있습니다.
+        </p>
         <p>
           접속 기록은 호스팅 업체의 정책에 따라 일정 기간 보관된 뒤 자동으로 삭제됩니다. 문의 내용은 답변 완료 후
           1년간 보관한 뒤 지체 없이 삭제합니다. 법령에서 따로 보관 기간을 정한 경우에는 그 기간 동안 보관합니다.
@@ -89,7 +100,8 @@ export default function PrivacyPage() {
         <p>사이트는 운영을 위해 아래 업체의 서비스를 이용하며, 이 과정에서 접속 정보가 처리될 수 있습니다.</p>
         <ul className="list-disc pl-5 space-y-1">
           <li>Vercel Inc. (미국) – 웹사이트 호스팅</li>
-          <li>Supabase Inc. – 데이터베이스 (게시물·방문 통계 저장, 개인 식별 정보는 저장하지 않음)</li>
+          <li>Supabase Inc. – 데이터베이스 (게시물 · 방문 통계 · 회원 정보 저장)</li>
+          <li>㈜카카오 – 카카오 로그인 (회원 인증)</li>
           <li>Google LLC (미국) – 광고 게재 (광고를 게재하는 경우)</li>
         </ul>
         <p>사이트는 위의 경우를 제외하고 이용자의 개인정보를 제3자에게 제공하지 않습니다.</p>

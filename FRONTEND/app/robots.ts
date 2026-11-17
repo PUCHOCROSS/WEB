@@ -7,7 +7,7 @@ export default function robots(): MetadataRoute.Robots {
       {
         userAgent: "*",
         allow: "/",
-        disallow: ["/api/", "/admin/"], // 관리자·API 경로가 있다면
+        disallow: ["/api/", "/admin/", "/auth/", "/me", "/login"], // 관리자 · API · 로그인 경로
       },
     ],
     sitemap: "https://www.dolmeori.com/sitemap.xml",
