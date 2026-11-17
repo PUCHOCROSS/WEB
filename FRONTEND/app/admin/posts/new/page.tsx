@@ -19,7 +19,7 @@ export default async function NewPost() {
         categories={cats}
         initial={{
           title: "", link: "", sourceUrl: "", source: "", image: "", content: "", startsOn: "", endsOn: "",
-          category: "", keywords: "", benefit: "", always: false, soldOut: false, highlight: "",
+          category: "", keywords: "", benefit: "", always: false, soldOut: false, highlight: "", tip: "",
         }}
       />
     </AdminShell>

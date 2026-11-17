@@ -58,6 +58,7 @@ export async function savePost(_prev: SaveState, form: FormData): Promise<SaveSt
     always: form.get("always") === "on",
     soldOut: form.get("soldOut") === "on",
     highlight: text(form, "highlight"),
+    tip: String(form.get("tip") ?? ""),
   };
   if (!fields.title) return { error: "제목을 입력해 주세요." };
 

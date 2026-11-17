@@ -13,6 +13,8 @@ export type ImageDraft = {
   keywords: string;
   category: string;
   always: boolean;
+  /** 꿀팁 초안 (AI 일 때만, 이미지에서 알 수 있을 때) */
+  tip?: string;
   /** OCR 일 때 읽은 글자 그대로 (확인용) */
   text?: string;
   /** 사용자에게 보여 줄 한 줄 안내 */

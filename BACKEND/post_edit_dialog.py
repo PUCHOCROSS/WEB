@@ -122,6 +122,15 @@ class PostEditDialog:
         tk.Label(side, text="쉼표로 구분. 제목에 없는 말로도 홈페이지 검색에 걸려요. 예) 스벅, 커피, 아메리카노",
                  font=T.font(8), fg=T.MUTED, bg=T.BG, anchor="w").pack(fill="x", pady=(3, 0))
 
+        # 💡 꿀팁 (체리피커 가이드): 줄마다 하나, 3줄까지
+        self._label(side, "💡 꿀팁 (줄마다 하나 · 3줄까지 · 선택)", pady=(10, 2))
+        self.tip_text = tk.Text(side, height=2, font=T.font(10), bg="#2A2615", fg="#FFE7A3", insertbackground=T.TEXT,
+                                relief="flat", wrap="word", highlightthickness=1, highlightbackground="#5C4A12")
+        self.tip_text.pack(fill="x")
+        self.tip_text.insert("1.0", self.item.get("tip") or "")
+        tk.Label(side, text="예) 신한 슈퍼SOL 로 결제하면 10% 추가 적립 — 할인과 중복 OK", font=T.font(8),
+                 fg=T.MUTED, bg=T.BG, anchor="w").pack(fill="x", pady=(3, 0))
+
         self._label(side, "대표 이미지 주소", pady=(12, 2))
         img_row = tk.Frame(side, bg=T.BG)
         img_row.pack(fill="x")
@@ -222,6 +231,9 @@ class PostEditDialog:
         if d.get("always"):
             self.always_var.set(True)
         self.kw_var.set(merge_keywords(self.kw_var.get(), d.get("keywords")))
+        if d.get("tip") and (replace or not self._tip()):       # AI 가 꿀팁도 써 줬으면
+            self.tip_text.delete("1.0", "end")
+            self.tip_text.insert("1.0", d["tip"])
         self.cat_picker.refresh()
         self.lbl_msg.config(text=note_of(d)[:90], fg=T.GREEN if d.get("mode") == "ai" else T.AMBER)
 
@@ -324,6 +336,10 @@ class PostEditDialog:
         self._render_thumb()
 
     # ── 본문 / 기간 도우미 ──────────────────────────────────────────────
+    def _tip(self):
+        lines = [l.strip().lstrip("-•·* ").strip() for l in self.tip_text.get("1.0", "end-1c").splitlines()]
+        return "\n".join(l for l in lines if l)[:400]
+
     def _content(self):
         return self.text.get("1.0", "end-1c").strip()
 
@@ -405,11 +421,13 @@ class PostEditDialog:
             "always": bool(self.always_var.get()),
             "soldOut": bool(self.soldout_var.get()),
             "highlight": self.hl_picker.get_slug(),
+            "tip": self._tip(),
         }
         old = {k: (self.item.get(k) or "") for k in new}
         old["keywords"] = clean_keywords(old["keywords"])
         old["always"] = bool(self.item.get("always"))
         old["soldOut"] = bool(self.item.get("soldOut"))
+        old["tip"] = "\n".join(l.strip() for l in str(self.item.get("tip") or "").splitlines() if l.strip())
         old["title"] = " ".join(str(old["title"]).split())
         old["content"] = str(old["content"]).strip()
         out = {k: v for k, v in new.items() if v != old[k]}
@@ -464,7 +482,7 @@ class PostEditDialog:
             names = {"title": "제목", "image": "이미지", "content": "본문", "startsOn": "기간", "endsOn": "기간",
                      "category": "카테고리", "keywords": "검색 키워드", "benefit": "혜택 유형",
                      "always": "상시", "soldOut": "소진", "highlight": "강조 표시",
-                     "sourceUrl": "원문 주소", "source": "출처"}
+                     "sourceUrl": "원문 주소", "source": "출처", "tip": "꿀팁"}
             changed = ", ".join(dict.fromkeys(names[k] for k in fields))
             T.toast(self.page, f"저장했습니다 ({changed}). 홈페이지에 바로 반영됩니다.", "ok")
 
@@ -503,7 +521,7 @@ class PostEditDialog:
         fields = {"title": title, "link": link, "source": self.source_var.get().strip(), "image": image,
                   "content": content, "category": self.cat_picker.get_slug(),
                   "keywords": clean_keywords(self.kw_var.get()), "benefit": self.benefit_picker.get_slug(),
-                  "always": bool(self.always_var.get()), "highlight": self.hl_picker.get_slug(),
+                  "always": bool(self.always_var.get()), "highlight": self.hl_picker.get_slug(), "tip": self._tip(),
                   "startsOn": start, "endsOn": end}
         url, token = STORE.get("publish.url", ""), STORE.get("publish.token", "")
         self.btn_save.set("발행 중...", enabled=False)

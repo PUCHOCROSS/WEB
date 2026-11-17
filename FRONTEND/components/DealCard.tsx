@@ -4,6 +4,7 @@ import { highlightOf } from "../lib/highlight";
 import type { DealSummary } from "../lib/categories";
 import PeriodBadge, { CalendarGlyph, periodLong } from "./PeriodBadge";
 import Thumb from "./Thumb";
+import { TipLine } from "./TipBox";
 
 function formatDate(iso?: string | null) {
   if (!iso) return "";
@@ -57,6 +58,7 @@ export default function DealCard({ deal }: { deal: DealSummary }) {
           )}
         </div>
         <h3 className="line-clamp-2 text-[15.5px] font-bold leading-[1.45] text-ink">{deal.title}</h3>
+        {!ended && <TipLine tip={deal.tip} className="mt-1.5" />}
         <div className="mt-auto pt-2.5 text-[12.5px] text-muted">
           {period ? (
             <p className="flex items-center gap-1.5 tabular-nums">

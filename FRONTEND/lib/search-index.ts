@@ -134,6 +134,7 @@ function buildEntry<T extends Record<string, any>>(item: T): Indexed<T> {
       item.cat?.label,
       stripRich(toText(item.content)),
       item.keywords,
+      item.tip, // 꿀팁 글자로도 검색 ("신한", "중복")
       benefitOf(item.benefit)?.label, // "룰렛", "선착순" 으로도 검색
       item.always ? "상시" : "",
     ]

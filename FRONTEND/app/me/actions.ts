@@ -4,12 +4,14 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { unlink } from "../../lib/kakao";
 import { currentMember, MEMBER_COOKIE } from "../../lib/memberSession";
+import { deleteCommentsOf } from "../../lib/comments";
 import { deleteMember } from "../../lib/members";
 
 export async function withdraw(): Promise<{ error: string } | void> {
   const m = await currentMember();
   if (!m) redirect("/login");
   try {
+    await deleteCommentsOf(m.id); // 탈퇴하면 쓴 댓글도 함께 지운다 (Supabase 는 표 설정으로 자동)
     await deleteMember(m.id);
   } catch (e) {
     console.error("[me] 탈퇴 실패:", e);

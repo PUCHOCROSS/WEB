@@ -352,7 +352,7 @@ class PagePosts(ttk.Frame):
             if it["id"] == deal_id:
                 it.update({k: item.get(k) for k in ("title", "image", "content", "startsOn", "endsOn", "category",
                                                      "keywords", "always", "soldOut", "benefit", "highlight",
-                                                     "sourceUrl", "source")})
+                                                     "sourceUrl", "source", "tip")})
         self._render()
 
     def toggle_soldout(self):

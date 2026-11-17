@@ -8,6 +8,7 @@ export function refreshPages(id?: string) {
   revalidatePath("/category/[slug]", "page");
   revalidatePath("/calendar");
   revalidatePath("/always");
+  revalidatePath("/tips");
   revalidatePath("/sitemap.xml");
   revalidatePath("/rss.xml");
   revalidatePath("/admin", "layout");

@@ -5,6 +5,7 @@ import DealList from "../components/DealList";
 import HomeSearch from "../components/HomeSearch";
 import MiniCalendar, { PromoBanner } from "../components/MiniCalendar";
 import RecommendCard from "../components/RecommendCard";
+import TipCards, { pickTips } from "../components/TipCards";
 import SiteFooter from "../components/SiteFooter";
 import SiteHeader from "../components/SiteHeader";
 import { toCalEvent, type CalEvent } from "../lib/calendar";
@@ -55,6 +56,7 @@ export default async function Home() {
   const events = deals.map(toCalEvent).filter((e): e is CalEvent => e !== null);
   const recommended = pickRecommended(deals);
   const alwaysCount = deals.filter((d) => d.always).length;
+  const tips = pickTips(deals).slice(0, 10);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -111,6 +113,22 @@ export default async function Home() {
                 <PromoBanner />
               </aside>
             </div>
+
+            {/* ── 💡 체리피커 꿀팁 (있을 때만) ── */}
+            {tips.length > 0 && (
+              <section className="mt-10" aria-label="체리피커 꿀팁">
+                <div className="mb-3 flex items-end justify-between gap-3">
+                  <h2 className="flex items-center gap-2 text-[19px] font-bold">
+                    <span aria-hidden>💡</span> 체리피커 꿀팁
+                    <span className="text-[13px] font-semibold text-muted">더 알뜰하게 받는 법</span>
+                  </h2>
+                  <Link href="/tips" className="shrink-0 text-[13.5px] font-semibold text-brand-dark hover:underline">
+                    전체 보기 ›
+                  </Link>
+                </div>
+                <TipCards deals={tips} />
+              </section>
+            )}
 
             {/* ── 전체 목록 ── */}
             <section id="deals" className="mt-12 scroll-mt-20">

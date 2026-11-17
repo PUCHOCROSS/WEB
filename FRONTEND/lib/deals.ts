@@ -33,6 +33,7 @@ export type Deal = {
   benefit?: string | null; // 혜택 유형 slug (lib/benefits.ts). 없으면 null
   highlight?: string | null; // 강조 표시 slug (lib/highlight.ts: hot=중요, pick=추천). 없으면 null
   sourceUrl?: string | null; // 보여 줄 원문 주소 (고칠 수 있음, 다른 글과 같아도 됨). 없으면 link 가 http 일 때 link
+  tip?: string | null; // 꿀팁 (체리피커 가이드): 에디터가 쓴 짧은 팁. 줄마다 하나, 최대 3줄
 };
 
 /** 상세 페이지 '원문 보기'에 쓸 주소. 없으면 null
@@ -82,6 +83,18 @@ function cleanBenefit(v: unknown): string | null | undefined {
   return isBenefit(v) ? v : undefined;
 }
 
+/** 꿀팁: 줄마다 하나, 빈 줄 빼고 최대 3줄 · 줄당 120자 */
+function cleanTip(v: unknown): string | null {
+  if (typeof v !== "string") return null;
+  const lines = v
+    .replace(/\r\n/g, "\n")
+    .split("\n")
+    .map((l) => l.replace(/\s+/g, " ").replace(/^[-•·*]\s*/, "").trim().slice(0, 120))
+    .filter(Boolean)
+    .slice(0, 3);
+  return lines.length ? lines.join("\n") : null;
+}
+
 /** 강조 표시: 비었으면 null, 알 수 없는 값이면 undefined (= 오류) */
 function cleanHighlight(v: unknown): string | null | undefined {
   if (v === null || v === undefined || v === "" || v === false) return null;
@@ -102,7 +115,7 @@ function cleanSlug(v: unknown): string | null | undefined {
 // ── 수정(PATCH) 입력 검증 ─────────────────────────────────────────────────
 /** 고칠 수 있는 칸. 보낸 칸만 바뀌고, 빠진 칸은 그대로 둔다. */
 export type DealPatch = Partial<
-  Pick<Deal, "title" | "image" | "content" | "startsOn" | "endsOn" | "category" | "keywords" | "always" | "soldOut" | "benefit" | "highlight" | "sourceUrl" | "source">
+  Pick<Deal, "title" | "image" | "content" | "startsOn" | "endsOn" | "category" | "keywords" | "always" | "soldOut" | "benefit" | "highlight" | "sourceUrl" | "source" | "tip">
 >;
 
 /** { title?, image?, content?, startsOn?, endsOn? } 검증. 문제가 있으면 { error } */
@@ -134,6 +147,7 @@ export function parsePatch(body: unknown): { patch: DealPatch } | { error: strin
     if (b === undefined) return { error: "혜택 유형 값이 올바르지 않습니다." };
     patch.benefit = b;
   }
+  if (has("tip")) patch.tip = cleanTip(o.tip);
   if (has("source")) {
     const src = clean(o.source, 100);
     if (!src) return { error: "출처는 비울 수 없습니다." };
@@ -238,6 +252,7 @@ export function parseItems(body: unknown): ParsedItems | null {
       benefit: cleanBenefit(o.benefit) ?? null,
       highlight: cleanHighlight(o.highlight) ?? null,
       sourceUrl: sourceUrl && sourceUrl !== link ? sourceUrl : null,
+      tip: cleanTip(o.tip),
     });
   }
   return { items, received: raw.length, rejected };
@@ -291,6 +306,7 @@ type Row = {
   benefit?: string | null;
   highlight?: string | null; // deal_highlight.sql 을 실행하기 전에는 없는 칸
   source_url?: string | null; // deal_source_url.sql 을 실행하기 전에는 없는 칸
+  tip?: string | null; // deal_tip.sql 을 실행하기 전에는 없는 칸
 };
 
 const rowToDeal = (r: Row): Deal => ({
@@ -314,9 +330,12 @@ const rowToDeal = (r: Row): Deal => ({
   benefit: r.benefit ?? null,
   highlight: r.highlight ?? null,
   sourceUrl: r.source_url ?? null,
+  tip: r.tip ?? null,
 });
 
 const c0 = (cols: readonly string[]) => cols[0];
+/** DB 오류 문구가 이 칸 이름을 말하는지 ('tip' / "tip" 처럼 따옴표째로 — 'multiple' 같은 낱말에 걸리지 않게) */
+const mentionsCol = (text: string, col: string) => text.includes(`'${col}'`) || text.includes(`"${col}"`);
 
 const supabaseStore: DealStore = (() => {
   const base = () => `${process.env.SUPABASE_URL!.replace(/\/$/, "")}/rest/v1/deals`;
@@ -363,6 +382,7 @@ const supabaseStore: DealStore = (() => {
         benefit: i.benefit ?? null,
         highlight: i.highlight ?? null,
         source_url: i.sourceUrl ?? null,
+        tip: i.tip ?? null,
       }));
       // ignore-duplicates + return=representation → 응답에는 '새로 저장된 행'만 담긴다
       const send = (body: object[]) =>
@@ -381,10 +401,11 @@ const supabaseStore: DealStore = (() => {
         [["always", "sold_out", "benefit"], "deal_types.sql"],
         [["highlight"], "deal_highlight.sql"],
         [["source_url"], "deal_source_url.sql"],
+        [["tip"], "deal_tip.sql"],
       ] as const) {
         if (res.ok) break;
         const text = await res.clone().text();
-        if (!cols.some((c) => text.includes(c))) continue;
+        if (!cols.some((c) => mentionsCol(text, c))) continue;
         console.warn(`[deals] DB 에 ${cols.join(", ")} 칸이 없어 빼고 저장합니다. supabase/${sql} 을 실행하세요.`);
         for (const r of rows) {
           // 원문 주소 칸이 없으면 예전처럼 link 에 넣는다 (이때는 같은 주소로 두 번 올릴 수 없음)
@@ -422,6 +443,7 @@ const supabaseStore: DealStore = (() => {
       if ("highlight" in patch) cols.highlight = patch.highlight;
       if ("sourceUrl" in patch) cols.source_url = patch.sourceUrl;
       if ("source" in patch) cols.source = patch.source;
+      if ("tip" in patch) cols.tip = patch.tip;
       const res = await fetch(`${base()}?id=eq.${id}`, {
         method: "PATCH",
         headers: headers({ Prefer: "return=representation" }),
@@ -435,6 +457,9 @@ const supabaseStore: DealStore = (() => {
         }
         if (["always", "sold_out", "benefit"].some((c) => c in cols && text.includes(c))) {
           throw new Error("DB 에 상시 / 소진 / 혜택 유형 칸이 없습니다. Supabase 에서 supabase/deal_types.sql 을 실행하세요.");
+        }
+        if ("tip" in cols && mentionsCol(text, "tip")) {
+          throw new Error("DB 에 꿀팁(tip) 칸이 없습니다. Supabase 에서 supabase/deal_tip.sql 을 실행하세요.");
         }
         if ("source_url" in cols && text.includes("source_url")) {
           throw new Error("DB 에 원문 주소(source_url) 칸이 없습니다. Supabase 에서 supabase/deal_source_url.sql 을 실행하세요.");
@@ -525,6 +550,7 @@ const readFile = async (): Promise<Deal[]> => {
       benefit: d.benefit ?? null,
       highlight: d.highlight ?? null,
       sourceUrl: d.sourceUrl ?? null,
+      tip: d.tip ?? null,
     }));
   } catch {
     return [];

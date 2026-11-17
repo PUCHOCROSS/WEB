@@ -14,12 +14,12 @@ function Logo() {
   );
 }
 
-export default function SiteHeader({ active }: { active?: "home" | "calendar" | "always" }) {
+export default function SiteHeader({ active }: { active?: "home" | "calendar" | "always" | "tips" }) {
   const nav = (href: string, label: string, on: boolean) => (
     <Link
       href={href}
       aria-current={on ? "page" : undefined}
-      className={`rounded-full px-3 py-1.5 text-[14.5px] font-semibold transition-colors ${
+      className={`whitespace-nowrap rounded-full px-1.5 py-1.5 text-[13px] font-semibold transition-colors min-[360px]:px-2 min-[360px]:text-[14px] sm:px-3 sm:text-[14.5px] ${
         on ? "bg-brand-soft text-brand-dark" : "text-ink/75 hover:text-ink"
       }`}
     >
@@ -38,6 +38,7 @@ export default function SiteHeader({ active }: { active?: "home" | "calendar" | 
             {nav("/", "홈", active === "home")}
             {nav("/calendar", "행사 달력", active === "calendar")}
             {nav("/always", "상시 혜택", active === "always")}
+            {nav("/tips", "꿀팁", active === "tips")}
           </nav>
           <VisitorCounter />
           <MemberButton />

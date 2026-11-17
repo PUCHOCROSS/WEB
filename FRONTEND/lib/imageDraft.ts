@@ -81,9 +81,11 @@ function prompt(cats: Category[], today: string) {
 - 카테고리(category): ${cats.map((c) => `${c.slug}=${c.label}`).join(", ")} 중 하나, 애매하면 ""
 - always: 끝나는 날이 없는 상시 혜택이면 true
 - keywords: 제목에 없는 검색어 3~6개, 쉼표로 (브랜드 다른 이름, 상품명 등)
+- tip: 이미지 조건으로 알 수 있는 실용 팁 1~2줄 (줄바꿈으로 구분). 예) 결제 수단 · 중복 가능 여부 · 시간 · 한도 활용법.
+  이미지로 확실히 알 수 없으면 "" (추측 금지)
 
 아래 JSON 하나만 출력하세요. 다른 말은 쓰지 마세요.
-{"title":"","content":"","startsOn":"YYYY-MM-DD 또는 \\"\\"","endsOn":"YYYY-MM-DD 또는 \\"\\"","benefit":"","category":"","always":false,"keywords":""}`;
+{"title":"","content":"","startsOn":"YYYY-MM-DD 또는 \\"\\"","endsOn":"YYYY-MM-DD 또는 \\"\\"","benefit":"","category":"","always":false,"keywords":"","tip":""}`;
 }
 
 async function aiDraft(bytes: Uint8Array, mime: string, cats: Category[]): Promise<ImageDraft> {
@@ -139,6 +141,7 @@ async function aiDraft(bytes: Uint8Array, mime: string, cats: Category[]): Promi
     category: cats.some((c) => c.slug === category) ? category : "",
     always: o.always === true,
     keywords: str(o.keywords, 200),
+    tip: str(o.tip, 300),
     note: "AI 가 이미지를 보고 쓴 초안이에요. 숫자·날짜가 맞는지 꼭 확인하고 다듬어 주세요.",
   };
 }

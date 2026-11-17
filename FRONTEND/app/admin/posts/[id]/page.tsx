@@ -52,6 +52,7 @@ export default async function EditPost({ params }: Props) {
           always: Boolean(deal.always),
           soldOut: Boolean(deal.soldOut),
           highlight: deal.highlight ?? "",
+          tip: deal.tip ?? "",
         }}
       />
     </AdminShell>

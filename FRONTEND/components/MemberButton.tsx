@@ -24,7 +24,7 @@ export default function MemberButton() {
     return (
       <Link
         href={`/login?next=${encodeURIComponent(typeof window === "undefined" ? "/" : window.location.pathname)}`}
-        className="rounded-full border border-rule px-3 py-1.5 text-[13.5px] font-semibold text-ink/80 hover:border-brand/50 hover:text-ink"
+        className="whitespace-nowrap rounded-full border border-rule px-2 py-1.5 text-[12.5px] min-[360px]:px-2.5 min-[360px]:text-[13px] font-semibold text-ink/80 hover:border-brand/50 hover:text-ink sm:px-3 sm:text-[13.5px]"
       >
         로그인
       </Link>

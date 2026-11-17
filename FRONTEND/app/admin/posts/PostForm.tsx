@@ -26,6 +26,7 @@ export type PostFormValues = {
   always: boolean;
   soldOut: boolean;
   highlight: string;
+  tip: string; // 꿀팁 (줄마다 하나)
 };
 
 const field =
@@ -61,6 +62,7 @@ export default function PostForm({
     startsOn: initial.startsOn,
     endsOn: initial.endsOn,
     keywords: initial.keywords,
+    tip: initial.tip,
   });
   const [draftKey, setDraftKey] = useState(0);
   const [drafting, setDrafting] = useState(false);
@@ -113,6 +115,7 @@ export default function PostForm({
         category: pick(cur.category ?? "", d.category),
         startsOn: pick(cur.startsOn ?? "", d.startsOn),
         endsOn: pick(cur.endsOn ?? "", d.endsOn),
+        tip: pick(cur.tip ?? "", d.tip ?? ""),
         // 키워드는 바꾸지 않고 합친다
         keywords: [...new Set([...(cur.keywords ?? "").split(","), ...d.keywords.split(",")].map((k) => k.trim()).filter(Boolean))].join(", "),
       });
@@ -226,6 +229,26 @@ export default function PostForm({
         </div>
         {!isNew && <input type="hidden" name="sourceUrlBefore" value={initial.sourceUrl} />}
         {!isNew && <input type="hidden" name="sourceBefore" value={initial.source} />}
+
+        <div className="rounded-2xl border border-[#F6D58E] bg-[#FFFBEB] p-4">
+          <label className="block">
+            <span className="mb-1 flex items-center gap-1.5 text-[13.5px] font-bold text-[#8A5A00]">
+              💡 꿀팁 <span className="font-semibold text-[#8A5A00]/70">(체리피커 가이드 · 선택)</span>
+            </span>
+            <textarea
+              key={`tip-${draftKey}`}
+              name="tip"
+              defaultValue={vals.tip}
+              rows={3}
+              maxLength={400}
+              placeholder={"한 줄에 하나, 3줄까지\n예) 신한 슈퍼SOL 로 결제하면 10% 추가 적립 — 메가커피 할인과 중복 OK\n예) 매일 오전 10시 선착순이라 9시 55분에 앱 켜 두기"}
+              className="w-full resize-y rounded-xl border border-[#F2E2B8] bg-white px-3.5 py-2.5 text-[14.5px] leading-[1.7] focus:border-[#E0A800] focus:outline-none focus:ring-4 focus:ring-[#E0A800]/15"
+            />
+          </label>
+          <span className="mt-1 block text-[12.5px] text-[#8A5A00]/80">
+            상세 페이지 맨 위 · 목록 카드 · 홈 &lsquo;꿀팁&rsquo; 코너에 보여요. 중복 할인 · 결제수단 · 시간 팁처럼 원문에 없는 내 노하우가 좋아요.
+          </span>
+        </div>
 
         <div>
           <span className="mb-1.5 block text-[13.5px] font-bold text-ink/85">본문</span>

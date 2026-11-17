@@ -157,6 +157,9 @@ def to_items(rows, platform_key, query, overrides=None):
         content = str(ov.get("content") or "").strip()
         if content:
             item["content"] = content[:20000]
+        tip = str(ov.get("tip") or "").strip()
+        if tip:
+            item["tip"] = tip[:400]          # 💡 꿀팁 (줄마다 하나)
         # 카테고리 (선택). 비어 있으면 홈페이지가 제목으로 자동 분류
         cat = str(ov.get("category") or "").strip()
         if cat:
@@ -295,7 +298,7 @@ def delete_published(base_url, token, deal_ids):
 def update_published(base_url, token, deal_id, fields):
     """이미 발행한 글 수정. fields 에 넣은 칸만 바뀐다.
     fields: {"title", "image", "content", "startsOn", "endsOn", "category", "keywords",
-             "always", "soldOut", "benefit", "highlight", "sourceUrl", "source"} 중 일부. 비우려면 "" (상시 / 소진은 True / False) 를 넣는다.
+             "always", "soldOut", "benefit", "highlight", "sourceUrl", "source", "tip"} 중 일부. 비우려면 "" (상시 / 소진은 True / False) 를 넣는다.
     고친 글(dict)을 돌려준다."""
     url = f"{normalize_endpoint(base_url)}?id={urllib.parse.quote(deal_id)}"
     res = _request(url, _check_token(token), fields, method="PATCH")

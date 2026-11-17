@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { SITE_NAME } from "../../../lib/site";
 import { logout } from "../actions";
 
-export type AdminTab = "home" | "posts" | "new" | "bulk" | "stats" | "members" | "util";
+export type AdminTab = "home" | "posts" | "new" | "bulk" | "stats" | "members" | "comments" | "util";
 
 const TABS: { id: AdminTab; href: string; label: string }[] = [
   { id: "home", href: "/admin", label: "대시보드" },
@@ -13,6 +13,7 @@ const TABS: { id: AdminTab; href: string; label: string }[] = [
   { id: "bulk", href: "/admin/posts/bulk", label: "표로 여러 건 등록" },
   { id: "stats", href: "/admin/stats", label: "방문 통계" },
   { id: "members", href: "/admin/members", label: "회원" },
+  { id: "comments", href: "/admin/comments", label: "댓글" },
   { id: "util", href: "/admin/util", label: "🧰 도구" },
 ];
 

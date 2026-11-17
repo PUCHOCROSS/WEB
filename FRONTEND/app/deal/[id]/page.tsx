@@ -14,6 +14,8 @@ import { benefitOf, dealBadge } from "../../../lib/benefits";
 import { highlightOf } from "../../../lib/highlight";
 import { stripRich } from "../../../lib/richText";
 import RichText from "../../../components/RichText";
+import TipBox from "../../../components/TipBox";
+import CommentSection from "../../../components/CommentSection";
 import PeriodBadge, { periodLong } from "../../../components/PeriodBadge";
 import CategoryIcon from "../../../components/CategoryIcon";
 import Thumb from "../../../components/Thumb";
@@ -212,6 +214,8 @@ export default async function DealDetailPage({ params }: Props) {
               </div>
             </dl>
 
+            <TipBox tip={deal.tip} />
+
             {(period.start || period.end) && (
               <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-brand-soft px-4 py-3.5">
                 <div className="flex items-center gap-3">
@@ -262,6 +266,8 @@ export default async function DealDetailPage({ params }: Props) {
                 <p className="mt-3 text-center text-[12.5px] text-muted">행사 내용은 바뀔 수 있으니 참여 전에 원문에서 꼭 확인하세요.</p>
               </>
             )}
+
+            <CommentSection dealId={deal.id} />
           </div>
         </article>
 

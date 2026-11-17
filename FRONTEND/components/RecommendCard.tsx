@@ -3,6 +3,7 @@ import type { DealSummary } from "../lib/categories";
 import { highlightOf } from "../lib/highlight";
 import PeriodBadge, { CalendarGlyph, periodLong } from "./PeriodBadge";
 import Thumb from "./Thumb";
+import { TipLine } from "./TipBox";
 
 /** 추천 행사 카드
  *  - column: [큰 이미지 + 상태] / 카테고리 / 제목 / 기간 / 자세히 보기   (홈 '오늘의 추천 행사')
@@ -67,6 +68,7 @@ export default function RecommendCard({ deal, layout = "column" }: { deal: DealS
           {cat.label}
         </p>
         <h3 className="mt-0.5 line-clamp-2 text-[16px] font-bold leading-snug text-ink">{deal.title}</h3>
+        <TipLine tip={deal.tip} className="mt-1.5" />
         <div className="mt-auto pt-2.5">{date}</div>
         <span className="mt-3 inline-flex items-center justify-center rounded-full border border-rule py-2 text-[13px] font-semibold text-ink/80 group-hover:border-brand group-hover:text-brand-dark">
           자세히 보기 ›
