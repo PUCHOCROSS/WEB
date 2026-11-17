@@ -4,8 +4,13 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-type C = { id: string; nickname: string; image: string | null; body: string; createdAt: string; mine: boolean };
-type Data = { enabled: boolean; me: { nickname: string; image: string | null } | null; comments: C[] };
+type C = { id: string; nickname: string; image: string | null; body: string; createdAt: string; mine: boolean; staff?: boolean };
+type Data = {
+  enabled: boolean;
+  me: { nickname: string; image: string | null; staff?: boolean } | null;
+  canModerate?: boolean; // 관리자: 모든 댓글 삭제 가능
+  comments: C[];
+};
 
 const MAX = 500;
 
@@ -18,7 +23,17 @@ function ago(iso: string) {
   return new Intl.DateTimeFormat("ko-KR", { month: "long", day: "numeric", timeZone: "Asia/Seoul" }).format(new Date(iso));
 }
 
-function Avatar({ name, image }: { name: string; image: string | null }) {
+function Avatar({ name, image, staff }: { name: string; image: string | null; staff?: boolean }) {
+  if (staff) {
+    return (
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-white" aria-hidden>
+        <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 8.5V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v1.5a2.5 2.5 0 0 0 0 5V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-3.5a2.5 2.5 0 0 0 0-5Z" />
+          <path d="m9.5 14.5 5-5" />
+        </svg>
+      </span>
+    );
+  }
   return image ? (
     // eslint-disable-next-line @next/next/no-img-element
     <img src={image} alt="" className="h-8 w-8 shrink-0 rounded-full border border-rule object-cover" referrerPolicy="no-referrer" />
@@ -94,13 +109,14 @@ export default function CommentSection({ dealId }: { dealId: string }) {
       {data.comments.length > 0 && (
         <ul className="mb-5 space-y-4">
           {data.comments.map((c) => (
-            <li key={c.id} className="flex gap-3">
-              <Avatar name={c.nickname} image={c.image} />
+            <li key={c.id} className={`flex gap-3 ${c.staff ? "rounded-xl bg-brand-soft/60 p-2.5 -mx-2.5" : ""}`}>
+              <Avatar name={c.nickname} image={c.image} staff={c.staff} />
               <div className="min-w-0 flex-1">
                 <p className="flex items-center gap-2 text-[13px]">
                   <span className="font-bold text-ink">{c.nickname}</span>
+                  {c.staff && <span className="rounded-md bg-brand px-1.5 py-0.5 text-[11px] font-bold text-white">운영자</span>}
                   <span className="text-muted">{ago(c.createdAt)}</span>
-                  {c.mine && (
+                  {(c.mine || data.canModerate) && (
                     <button type="button" onClick={() => remove(c.id)} className="ml-auto text-[12px] text-muted hover:text-[#C62828]">
                       삭제
                     </button>
@@ -116,7 +132,7 @@ export default function CommentSection({ dealId }: { dealId: string }) {
       {data.me ? (
         <div className="rounded-2xl border border-rule bg-white p-3 focus-within:border-brand focus-within:ring-4 focus-within:ring-brand/10">
           <div className="flex gap-3">
-            <Avatar name={data.me.nickname} image={data.me.image} />
+            <Avatar name={data.me.nickname} image={data.me.image} staff={data.me.staff} />
             <textarea
               value={text}
               onChange={(e) => setText(e.target.value.slice(0, MAX))}
@@ -124,7 +140,7 @@ export default function CommentSection({ dealId }: { dealId: string }) {
                 if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) void submit();
               }}
               rows={2}
-              placeholder="써 보셨나요? 사용 후기나 팁을 남겨 주세요."
+              placeholder={data.me.staff ? "운영자로 댓글을 남깁니다 (관리자로 로그인 중)" : "써 보셨나요? 사용 후기나 팁을 남겨 주세요."}
               className="min-h-[52px] flex-1 resize-y bg-transparent text-[15px] leading-[1.6] focus:outline-none"
             />
           </div>

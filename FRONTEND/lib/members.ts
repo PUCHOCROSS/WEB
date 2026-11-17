@@ -10,7 +10,7 @@ import path from "node:path";
 
 export type Member = {
   id: string;
-  provider: "kakao";
+  provider: "kakao" | "admin"; // admin = 관리자가 댓글을 쓸 때 쓰는 '운영자' 계정 (회원 목록에는 안 나옴)
   providerId: string;
   nickname: string;
   image: string | null;
@@ -30,7 +30,7 @@ type Row = {
 
 const toMember = (r: Row): Member => ({
   id: r.id,
-  provider: "kakao",
+  provider: r.provider === "admin" ? "admin" : "kakao",
   providerId: r.provider_id,
   nickname: r.nickname || "회원",
   image: r.image,
@@ -112,7 +112,7 @@ export async function getMember(id: string): Promise<Member | null> {
 /** 관리자: 최근 가입 순 */
 export async function listMembers(limit = 500): Promise<{ members: Member[]; total: number }> {
   if (onSupabase()) {
-    const res = await fetch(`${base()}?select=*&order=created_at.desc&limit=${limit}`, {
+    const res = await fetch(`${base()}?select=*&provider=eq.kakao&order=created_at.desc&limit=${limit}`, {
       headers: headers({ Prefer: "count=exact" }),
       cache: "no-store",
     });
@@ -121,8 +121,43 @@ export async function listMembers(limit = 500): Promise<{ members: Member[]; tot
     const members = ((await res.json()) as Row[]).map(toMember);
     return { members, total: Number.isNaN(total) ? members.length : total };
   }
-  const rows = (await readFile()).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const rows = (await readFile()).filter((r) => r.provider === "kakao").sort((a, b) => b.created_at.localeCompare(a.created_at));
   return { members: rows.slice(0, limit).map(toMember), total: rows.length };
+}
+
+/** 관리자 댓글용 '운영자' 계정 (없으면 만든다). 댓글 표가 회원 id 를 요구해서 하나 둔다 */
+export async function adminMember(nickname: string): Promise<Member> {
+  if (onSupabase()) {
+    const res = await fetch(`${base()}?on_conflict=provider,provider_id`, {
+      method: "POST",
+      headers: headers({ Prefer: "resolution=merge-duplicates,return=representation" }),
+      body: JSON.stringify([{ provider: "admin", provider_id: "admin", nickname, image: null }]),
+      cache: "no-store",
+    });
+    await check(res, "운영자 계정");
+    return toMember(((await res.json()) as Row[])[0]);
+  }
+  const rows = await readFile();
+  let row = rows.find((r) => r.provider === "admin");
+  if (!row) {
+    const now = new Date().toISOString();
+    row = { id: randomUUID(), provider: "admin", provider_id: "admin", nickname, image: null, created_at: now, last_login_at: now };
+    rows.push(row);
+    await writeFile(rows);
+  }
+  return toMember(row);
+}
+
+/** 운영자 계정 찾기 (없으면 null, 만들지 않음) */
+export async function findAdminMember(): Promise<Member | null> {
+  if (onSupabase()) {
+    const res = await fetch(`${base()}?select=*&provider=eq.admin&limit=1`, { headers: headers(), cache: "no-store" });
+    await check(res, "운영자 조회");
+    const rows = (await res.json()) as Row[];
+    return rows[0] ? toMember(rows[0]) : null;
+  }
+  const row = (await readFile()).find((r) => r.provider === "admin");
+  return row ? toMember(row) : null;
 }
 
 /** 회원 탈퇴: 기록을 바로 지운다 */
