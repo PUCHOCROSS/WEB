@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { CalEvent } from "../lib/calendar";
+import { eventsOn, type CalEvent } from "../lib/calendar";
 import { addDays, diffDays, weekdayOf } from "../lib/period";
 import CategoryIcon from "./CategoryIcon";
 
@@ -8,7 +8,8 @@ const WEEK = ["일", "월", "화", "수", "목", "금", "토"];
 /** 홈 오른쪽 작은 달력
  *  - 진행 중인 날마다 점을 찍으면 한 달짜리 행사 하나로 모든 날이 채워져 정보가 없어진다.
  *    그래서 '시작하는 날'(초록)과 '끝나는 날'(빨강)에만 그날의 건수를 옅은 알약 숫자로 표시한다. 지난 날은 흐리게.
- *  - 아래에 '다가오는 일정'(시작·마감)을 가까운 순으로 몇 개 보여 준다.
+ *  - 오늘 칸에는 '오늘 유효한(진행 중인) 행사' 수를 진한 초록 알약으로, 아래에 그 목록을 보여 준다.
+ *  - 그 아래 '다가오는 일정'(내일부터 시작·마감)을 가까운 순으로 몇 개 보여 준다.
  *  날짜를 누르면 행사 달력의 그날로. */
 export default function MiniCalendar({ events, today }: { events: CalEvent[]; today: string }) {
   const ym = today.slice(0, 7);
@@ -27,12 +28,16 @@ export default function MiniCalendar({ events, today }: { events: CalEvent[]; to
     if (e.endsOn) ends.set(e.endsOn, (ends.get(e.endsOn) ?? 0) + 1);
   }
 
-  // 다가오는 일정: 오늘부터 가까운 날 순 (같은 날이면 시작 → 하루 → 마감).
+  // 오늘 유효한 행사 (행사 달력의 그날 목록과 같은 기준: 마감이 가까운 순)
+  const todayList = eventsOn(events, today);
+
+  // 다가오는 일정: 내일부터 가까운 날 순 (오늘 것은 위 '오늘 진행 중'에 이미 나온다) (같은 날이면 시작 → 하루 → 마감).
   // 같은 날 같은 종류는 한 줄로 묶어 '… 외 N건' — 하루에 몰려도 다음 일정까지 보이게.
   // 하루만 하는 행사(시작일 = 종료일)는 시작·마감 두 줄 대신 '하루' 한 줄로.
   type Item = { day: string; kind: "start" | "day" | "end"; list: CalEvent[] };
   const ORDER = { start: 0, day: 1, end: 2 } as const;
   const groups = new Map<string, Item>();
+  const shown = new Set(todayList.slice(0, TODAY_MAX).map((e) => e.id)); // 위에 이미 보인 행사의 마감은 또 쓰지 않는다
   for (const e of events) {
     const add = (day: string, kind: Item["kind"]) => {
       const key = `${day}-${kind}`;
@@ -41,10 +46,10 @@ export default function MiniCalendar({ events, today }: { events: CalEvent[]; to
       groups.set(key, g);
     };
     if (e.startsOn && e.startsOn === e.endsOn) {
-      if (e.startsOn >= today) add(e.startsOn, "day");
+      if (e.startsOn > today) add(e.startsOn, "day");
       continue;
     }
-    if (e.endsOn && e.endsOn >= today) add(e.endsOn, "end");
+    if (e.endsOn && e.endsOn > today && !shown.has(e.id)) add(e.endsOn, "end");
     if (e.startsOn && e.startsOn > today) add(e.startsOn, "start");
   }
   const upcoming = [...groups.values()]
@@ -75,6 +80,10 @@ export default function MiniCalendar({ events, today }: { events: CalEvent[]; to
         </p>
         <p className="flex items-center gap-2.5 text-[11.5px] text-muted" aria-hidden>
           <span className="flex items-center gap-1">
+            <Count n={5} tone="today" />
+            오늘 진행
+          </span>
+          <span className="flex items-center gap-1">
             <Count n={2} tone="start" />
             시작
           </span>
@@ -95,9 +104,11 @@ export default function MiniCalendar({ events, today }: { events: CalEvent[]; to
           const past = d < today;
           const wd = weekdayOf(d);
           const isToday = d === today;
-          const s = out || past ? 0 : (starts.get(d) ?? 0);
-          const e = out || past ? 0 : (ends.get(d) ?? 0);
-          const label = [s && `시작 ${s}건`, e && `마감 ${e}건`].filter(Boolean).join(", ");
+          // 오늘은 시작·마감 대신 '오늘 유효한 행사' 수 하나만
+          const live = isToday ? todayList.length : 0;
+          const s = out || past || isToday ? 0 : (starts.get(d) ?? 0);
+          const e = out || past || isToday ? 0 : (ends.get(d) ?? 0);
+          const label = [live && `진행 중 ${live}건`, s && `시작 ${s}건`, e && `마감 ${e}건`].filter(Boolean).join(", ");
           return (
             <Link
               key={d}
@@ -115,6 +126,7 @@ export default function MiniCalendar({ events, today }: { events: CalEvent[]; to
                 {+d.slice(8, 10)}
               </span>
               <span aria-hidden className="mt-0.5 flex h-[15px] items-center gap-[2px]">
+                {live > 0 && <Count n={live} tone="today" />}
                 {s > 0 && <Count n={s} tone="start" />}
                 {e > 0 && <Count n={e} tone="end" />}
               </span>
@@ -124,6 +136,40 @@ export default function MiniCalendar({ events, today }: { events: CalEvent[]; to
       </div>
 
       <div className="mt-4 border-t border-rule pt-3.5">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="flex items-center gap-1.5 text-[13px] font-bold">
+            오늘 진행 중
+            <Count n={todayList.length} tone="today" full />
+          </p>
+          {todayList.length > TODAY_MAX && (
+            <Link href={`/calendar?d=${today}`} className="text-[12px] font-semibold text-muted hover:text-brand-dark">
+              전체 {todayList.length}건 ›
+            </Link>
+          )}
+        </div>
+        {todayList.length === 0 ? (
+          <p className="py-1 text-[13px] text-muted">오늘 진행 중인 행사가 없어요.</p>
+        ) : (
+          <ul className="space-y-1.5">
+            {todayList.slice(0, TODAY_MAX).map((ev) => (
+              <li key={ev.id}>
+                <Link href={`/deal/${ev.id}`} className="group flex items-center gap-2 text-[13px]">
+                  <span
+                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-[11.5px] font-bold tabular-nums ${
+                      ev.endsOn === today ? "bg-[#FDECEC] text-[#D93636]" : "bg-brand-soft text-brand-dark"
+                    }`}
+                  >
+                    {liveTag(ev, today)}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-ink/85 group-hover:underline">{ev.title}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="mt-3.5 border-t border-rule pt-3.5">
         <p className="mb-2 text-[13px] font-bold">다가오는 일정</p>
         {upcoming.length === 0 ? (
           <p className="py-2 text-[13px] text-muted">이번에 시작하거나 끝나는 행사가 없어요.</p>
@@ -154,15 +200,28 @@ export default function MiniCalendar({ events, today }: { events: CalEvent[]; to
   );
 }
 
-/** 그날 시작(초록) / 마감(빨강) 건수. 옅은 바탕에 진한 숫자(연한 알약). 10건 이상은 9+ */
-function Count({ n, tone }: { n: number; tone: "start" | "end" }) {
+const TODAY_MAX = 4; // '오늘 진행 중'에 보여 줄 최대 줄 수 (넘치면 '전체 N건')
+
+/** 오늘 진행 중 목록의 꼬리표: 오늘 시작 / 오늘 마감 / D-3 / ~11.30 */
+function liveTag(ev: CalEvent, today: string) {
+  if (ev.endsOn === today) return "오늘 마감";
+  if (ev.startsOn === today) return "오늘 시작";
+  if (ev.endsOn) {
+    const n = diffDays(ev.endsOn, today);
+    return n <= 7 ? `D-${n}` : `~${+ev.endsOn.slice(5, 7)}.${+ev.endsOn.slice(8, 10)}`;
+  }
+  return "진행 중";
+}
+
+/** 그날 시작(옅은 초록) / 마감(빨강) / 오늘 진행 중(진한 초록) 건수. 10건 이상은 9+ */
+function Count({ n, tone, full }: { n: number; tone: "start" | "end" | "today"; full?: boolean }) {
   return (
     <span
       className={`flex h-[14px] min-w-[14px] items-center justify-center rounded-[5px] px-[4px] text-[9.5px] font-bold leading-none tabular-nums ${
-        tone === "start" ? "bg-brand-soft text-brand-dark" : "bg-[#FDECEC] text-[#D93636]"
+        tone === "today" ? "bg-brand text-white" : tone === "start" ? "bg-brand-soft text-brand-dark" : "bg-[#FDECEC] text-[#D93636]"
       }`}
     >
-      {n > 9 ? "9+" : n}
+      {n > 9 && !full ? "9+" : n}
     </span>
   );
 }
