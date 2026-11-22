@@ -393,8 +393,9 @@ const supabaseStore: DealStore = (() => {
           cache: "no-store",
         });
       let res = await send(rows);
-      // 아직 SQL 을 실행하지 않아 없는 칸이 있으면, 그 칸을 빼고 다시 저장 (발행이 멈추지 않게)
-      for (const [cols, sql] of [
+      // 아직 SQL 을 실행하지 않아 없는 칸이 있으면, 그 칸을 빼고 다시 저장 (발행이 멈추지 않게).
+      // DB 는 없는 칸을 한 번에 하나씩만 알려 주므로, 더 뺄 칸이 없을 때까지 되풀이한다 (순서와 상관없이).
+      const groups: [readonly string[], string][] = [
         [["starts_on", "ends_on"], "deal_period.sql"],
         [["category"], "manual_posts.sql"],
         [["keywords"], "deal_keywords.sql"],
@@ -402,10 +403,14 @@ const supabaseStore: DealStore = (() => {
         [["highlight"], "deal_highlight.sql"],
         [["source_url"], "deal_source_url.sql"],
         [["tip"], "deal_tip.sql"],
-      ] as const) {
-        if (res.ok) break;
+      ];
+      const dropped = new Set<string>();
+      while (!res.ok) {
         const text = await res.clone().text();
-        if (!cols.some((c) => mentionsCol(text, c))) continue;
+        const hit = groups.find(([cols, sql]) => !dropped.has(sql) && cols.some((c) => mentionsCol(text, c)));
+        if (!hit) break;
+        const [cols, sql] = hit;
+        dropped.add(sql);
         console.warn(`[deals] DB 에 ${cols.join(", ")} 칸이 없어 빼고 저장합니다. supabase/${sql} 을 실행하세요.`);
         for (const r of rows) {
           // 원문 주소 칸이 없으면 예전처럼 link 에 넣는다 (이때는 같은 주소로 두 번 올릴 수 없음)
@@ -414,6 +419,7 @@ const supabaseStore: DealStore = (() => {
         }
         res = await send(rows);
       }
+      if (!res.ok) console.error("[deals] 저장 실패:", (await res.clone().text()).slice(0, 300));
       await check(res, "저장");
       return ((await res.json()) as Row[]).map(rowToDeal);
     },
