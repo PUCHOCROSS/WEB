@@ -314,7 +314,7 @@ function EventCard({ e, day, today }: { e: CalEvent; day: string; today: string 
         </p>
       </div>
       <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-rule bg-white">
-        <Thumb src={e.image} alt="" accentColor={c.color} slug={c.icon} iconClass="h-7 w-7" />
+        <Thumb src={e.image} alt="" accentColor={c.color} slug={c.icon} iconClass="h-7 w-7" seed={e.id} title={e.title} />
       </div>
     </Link>
   );

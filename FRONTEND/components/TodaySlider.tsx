@@ -205,7 +205,7 @@ function TicketSlide({ deal, label }: { deal: DealSummary; label: string }) {
           </p>
         </div>
         <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-rule bg-white">
-          <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.icon} iconClass="h-8 w-8" />
+          <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.icon} iconClass="h-8 w-8" seed={deal.id} title={deal.title} source={deal.source} />
         </div>
       </Link>
     </div>

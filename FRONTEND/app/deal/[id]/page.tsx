@@ -162,7 +162,7 @@ export default async function DealDetailPage({ params }: Props) {
 
         <article className="card overflow-hidden">
           <div className="relative m-3 mb-0 aspect-[4/3] overflow-hidden rounded-[16px] bg-ground sm:aspect-[16/10]">
-            <Thumb src={deal.image} alt={`${deal.title} 행사 이미지`}accentColor={cat.color} slug={cat.icon} iconClass="h-16 w-16" />
+            <Thumb src={deal.image} alt={`${deal.title} 행사 이미지`} accentColor={cat.color} slug={cat.icon} iconClass="h-16 w-16" seed={deal.id} title={deal.title} source={deal.source} />
           </div>
 
           <div className="px-5 pb-6 pt-5 sm:px-8 sm:pb-8 sm:pt-7">

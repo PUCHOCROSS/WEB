@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import AutoCover from "./AutoCover";
 import CategoryIcon from "./CategoryIcon";
 
 /** 대표 이미지
  *  - fit="fill"(기본): 이미지 전체가 보이게 넣고, 남는 여백은 같은 이미지를 흐리게 깔아 채운다.
  *    직접 만든 포스터처럼 글씨가 있는 이미지도 잘리지 않는다.
  *  - fit="cover": 칸을 꽉 채우도록 잘라서 보여준다 (작은 썸네일용).
- *  - 이미지가 없거나 깨지면 카테고리 색 바탕에 카테고리 아이콘. */
+ *  - 이미지가 없거나 깨지면: title 이 있으면 글마다 다른 자동 표지(AutoCover),
+ *    없으면 카테고리 색 바탕에 카테고리 아이콘. */
 export default function Thumb({
   src,
   alt,
@@ -15,6 +17,9 @@ export default function Thumb({
   slug = "etc",
   iconClass = "h-10 w-10",
   fit = "fill",
+  seed,
+  title,
+  source,
 }: {
   src?: string | null;
   alt: string;
@@ -23,8 +28,15 @@ export default function Thumb({
   label?: string; // (예전 호환용, 쓰지 않음)
   iconClass?: string;
   fit?: "fill" | "cover" | "contain";
+  seed?: string; // 자동 표지 모양을 고르는 값 (보통 글 id)
+  title?: string; // 자동 표지에 쓸 제목
+  source?: string | null; // 자동 표지에 쓸 브랜드(출처)
 }) {
   const [broken, setBroken] = useState(false);
+
+  if ((!src || broken) && title) {
+    return <AutoCover seed={seed ?? title} title={title} source={source} slug={slug} />;
+  }
 
   if (!src || broken) {
     return (

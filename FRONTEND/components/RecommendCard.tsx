@@ -43,7 +43,7 @@ export default function RecommendCard({ deal, layout = "column" }: { deal: DealS
           <div className="mt-1.5">{date}</div>
         </div>
         <div className="h-24 w-24 shrink-0 overflow-hidden rounded-2xl border border-rule">
-          <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.icon} iconClass="h-9 w-9" />
+          <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.icon} iconClass="h-9 w-9" seed={deal.id} title={deal.title} source={deal.source} />
         </div>
       </Link>
     );
@@ -55,7 +55,7 @@ export default function RecommendCard({ deal, layout = "column" }: { deal: DealS
       className={`group flex h-full flex-col overflow-hidden rounded-[18px] border border-rule bg-white p-2.5 transition-colors hover:border-brand/50 ${hl ? hl.card : ""}`}
     >
       <div className="relative aspect-[4/3] overflow-hidden rounded-[14px]">
-        <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.icon} iconClass="h-12 w-12" />
+        <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.icon} iconClass="h-12 w-12" seed={deal.id} title={deal.title} source={deal.source} />
         {deal.badge && (
           <span className="absolute right-2 top-2 rounded-full shadow-sm ring-2 ring-white">
             <PeriodBadge badge={deal.badge} />

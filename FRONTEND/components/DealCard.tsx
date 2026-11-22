@@ -30,7 +30,7 @@ export default function DealCard({ deal }: { deal: DealSummary }) {
       } ${hl ? hl.card : ""}`}
     >
       <div className="relative aspect-[16/10] overflow-hidden rounded-[14px] bg-ground">
-        <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.icon} />
+        <Thumb src={deal.image} alt="" accentColor={cat.color} slug={cat.icon} seed={deal.id} title={deal.title} source={deal.source} />
         {deal.fresh && (
           <span className="absolute left-2 top-2 rounded-full bg-white/95 px-2 py-0.5 text-[11.5px] font-bold text-brand-dark shadow-sm">
             NEW
