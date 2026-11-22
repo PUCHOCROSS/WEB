@@ -33,7 +33,8 @@ function dbMessage(e: unknown, fallback: string) {
   if (/deal_keywords\.sql|deal_types\.sql|deal_highlight\.sql|deal_source_url\.sql/.test(msg)) return msg;
   if (/starts_on|ends_on/.test(msg)) return "DB 에 기간 칸이 없습니다. Supabase 에서 deal_period.sql 을 먼저 실행하세요.";
   if (/category/.test(msg)) return "DB 에 카테고리 칸이 없습니다. Supabase 에서 manual_posts.sql 을 먼저 실행하세요.";
-  return fallback;
+  // 관리자 화면이라 원인을 바로 볼 수 있게 DB 오류 앞부분을 붙인다
+  return `${fallback} (원인: ${msg.slice(0, 180)})`;
 }
 
 const text = (form: FormData, key: string) => String(form.get(key) ?? "").trim();
