@@ -21,6 +21,14 @@ export const TOOLS: Tool[] = [
     color: "#7C3AED",
     ready: true,
   },
+  {
+    slug: "search",
+    name: "검색엔진에 알리기",
+    desc: "올린 글 전부를 네이버·빙에 한 번에 알림",
+    emoji: "📣",
+    color: "#03C75A",
+    ready: true,
+  },
 ];
 
 export const toolOf = (slug: string) => TOOLS.find((t) => t.slug === slug);
