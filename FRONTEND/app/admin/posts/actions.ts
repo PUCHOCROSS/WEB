@@ -5,6 +5,7 @@
 // 입력 검증은 발행 API 와 같은 함수(parseItems / parsePatch)를 그대로 씁니다.
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { notifySearchEngines } from "../../../lib/indexnow";
 import { isAdmin } from "../../../lib/admin";
 import {
   MAX_ITEMS,
@@ -109,6 +110,7 @@ export async function savePost(_prev: SaveState, form: FormData): Promise<SaveSt
     }
   }
   refreshPages(savedId);
+  notifySearchEngines([savedId]);
   redirect(`/admin/posts?${id ? "saved" : "created"}=${savedId}`);
 }
 
@@ -236,7 +238,10 @@ export async function publishBulk(items: BulkItem[]): Promise<BulkResult> {
   if (!parsed) return { ok: false, error: "항목 형식이 올바르지 않습니다." };
   try {
     const created = await insertDeals(parsed.items);
-    if (created.length > 0) refreshPages();
+    if (created.length > 0) {
+      refreshPages();
+      notifySearchEngines(created.map((d) => d.id));
+    }
     return {
       ok: true,
       inserted: created.length,

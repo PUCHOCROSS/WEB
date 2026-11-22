@@ -5,6 +5,7 @@
 //                                 + category (""=자동 분류), keywords, always, soldOut, benefit, highlight (hot / pick)
 //                                 보낸 칸만 바뀜. image / content / 날짜 / keywords / benefit 은 "" 또는 null 로 비움
 //   DELETE /api/deals?id=<uuid>   발행 취소 (토큰 필요)
+import { notifySearchEngines } from "../../../lib/indexnow";
 import { NextResponse } from "next/server";
 import { authenticate, fail } from "../../../lib/apiAuth";
 import {
@@ -58,7 +59,10 @@ export async function POST(req: Request) {
     return fail(502, "저장소에 기록하지 못했습니다. 서버 로그를 확인하세요.");
   }
   const inserted = created.length;
-  if (inserted > 0) refreshPages();
+  if (inserted > 0) {
+    refreshPages();
+    notifySearchEngines(created.map((d) => d.id));
+  }
 
   return NextResponse.json({
     ok: true,
@@ -114,6 +118,7 @@ export async function PATCH(req: Request) {
     const deal = await updateDeal(id, parsed.patch);
     if (!deal) return fail(404, "해당 항목이 없습니다.");
     refreshPages(id);
+    notifySearchEngines([id]);
     return NextResponse.json({ ok: true, item: deal });
   } catch (e) {
     console.error("[api/deals] update failed:", e);
